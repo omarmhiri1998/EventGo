@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   basePath: "/admin",
 
   transpilePackages: [
-    "@eventgo/ui",
     "@eventgo/backend",
   ],
 
@@ -14,16 +13,8 @@ const nextConfig: NextConfig = {
   },
 
   cacheComponents: true,
-  partialPrefetching: true,
 
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
+  partialPrefetching: true,
 };
 
 export default nextConfig;

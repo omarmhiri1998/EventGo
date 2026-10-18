@@ -1,4 +1,3 @@
-
 import argon2 from "argon2";
 import { pool } from "../db/database";
 
@@ -27,9 +26,7 @@ export async function signup({
     throw new Error("Name must contain at least 2 characters");
   }
 
-  if (
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
-  ) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     throw new Error("Invalid email address");
   }
 
@@ -70,6 +67,7 @@ export async function signup({
     throw error;
   }
 }
+
 type LoginInput = {
   email: string;
   password: string;
@@ -84,6 +82,18 @@ export async function login({
   password,
 }: LoginInput): Promise<PublicUser> {
   const normalizedEmail = email.trim().toLowerCase();
+
+  // Temporary diagnostic: remove after identifying the connection.
+  const dbInfo = await pool.query(`
+    SELECT
+      current_database() AS database_name,
+      current_schema() AS schema_name,
+      current_user AS database_user,
+      inet_server_addr()::text AS server_address,
+      inet_server_port() AS server_port
+  `);
+
+  console.log("AUTH DATABASE:", dbInfo.rows[0]);
 
   const result = await pool.query<AuthUser>(
     `
