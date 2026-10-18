@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 
 // Shared UI Components
-import { Brand } from "@eventgo/ui/Brand";
-import { IconButton } from "@eventgo/ui/IconButton";
+import Brand from "@/ui/atoms/Brand/Brand";
+import  IconButton  from "@/ui/atoms/IconButton/IconButton";
 
 // Admin Components
 import { NavbarFireworks } from "@/components/atoms/NavbarFireworks/NavbarFireworks";

@@ -11,7 +11,7 @@ import {
 import type {
   Event,
   EventCategory,
-} from "@eventgo/ui/EventFilters";
+} from "@/types/event";
 
 type CategoryFilter = EventCategory | "all";
 
