@@ -62,10 +62,18 @@ export default function LoginPage() {
             // The refresh token is stored in an HttpOnly Cookie.
             // Never store access or refresh tokens in localStorage.
 
+            const adminUrl =
+                process.env.NEXT_PUBLIC_ADMIN_URL ??
+                "http://localhost:3001";
+
+            const appUrl =
+                process.env.NEXT_PUBLIC_APP_URL ??
+                "http://localhost:3000";
+
             if (data.user.role === "admin") {
-                window.location.replace("http://localhost:3001");
+                window.location.replace(adminUrl);
             } else if (data.user.role === "user") {
-                window.location.replace("http://localhost:3000");
+                window.location.replace(appUrl);
             } else {
                 setError("Unknown user role");
             }
