@@ -1,21 +1,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { login } from "../../../../../eventgo-backend/src/services/auth.service";
+import { login } from "@eventgo/backend/services/auth.service";
 import { createSession } from "../../../lib/sessions";
+
+export const runtime = "nodejs";
 
 const COOKIE_NAME = "eventgo_refresh";
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
-const PUBLIC_ORIGIN =
-  process.env.EVENTGO_PUBLIC_ORIGIN ??
-  "http://localhost:3000";
-
 export async function POST(request: NextRequest) {
-  // Validate the public application origin
   const origin = request.headers.get("origin");
 
-  if (origin !== PUBLIC_ORIGIN) {
+  if (!origin || origin !== request.nextUrl.origin) {
     return NextResponse.json(
       { message: "Forbidden origin" },
       { status: 403 }
@@ -48,13 +45,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Verify user credentials
     const user = await login({
       email: body.email,
       password: body.password,
     });
 
-    // Create Access Token and Refresh Token
     const { accessToken, refreshToken } =
       await createSession(user);
 
@@ -69,20 +64,26 @@ export async function POST(request: NextRequest) {
 
     response.headers.set("Cache-Control", "no-store");
 
-    // Remove the legacy cookie
-    response.cookies.set(COOKIE_NAME, "", {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
+    };
+
+    response.cookies.set(COOKIE_NAME, "", {
+      ...cookieOptions,
       path: "/api/auth",
       maxAge: 0,
     });
 
-    // Store refresh token in an HttpOnly Cookie
+    response.cookies.set(COOKIE_NAME, "", {
+      ...cookieOptions,
+      path: "/auth/api/auth",
+      maxAge: 0,
+    });
+
     response.cookies.set(COOKIE_NAME, refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOptions,
       path: "/",
       maxAge: REFRESH_MAX_AGE,
     });

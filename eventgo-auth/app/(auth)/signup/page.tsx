@@ -5,6 +5,15 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+type SignupResponse = {
+  message?: string;
+  user?: {
+    id: string;
+    name?: string | null;
+    email?: string;
+  };
+};
+
 export default function SignupPage() {
   const router = useRouter();
 
@@ -45,12 +54,13 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/signup", {
+      const response = await fetch("/auth/api/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "same-origin",
+        cache: "no-store",
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
@@ -58,10 +68,31 @@ export default function SignupPage() {
         }),
       });
 
-      const data = await response.json();
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        console.error(
+          "Signup API returned non-JSON response",
+          {
+            status: response.status,
+            contentType,
+          }
+        );
+
+        setError(
+          `Signup API error (HTTP ${response.status}).`
+        );
+        return;
+      }
+
+      const data: SignupResponse = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Account creation failed.");
+        setError(
+          data.message ||
+            `Account creation failed (HTTP ${response.status}).`
+        );
         return;
       }
 
@@ -70,10 +101,12 @@ export default function SignupPage() {
         return;
       }
 
-      // Signup succeeded.
-      // The user can now log in with the new account.
+      // Account created successfully.
+      // The user can now log in.
       router.push("/login");
-    } catch {
+    } catch (err) {
+      console.error("Signup request failed:", err);
+
       setError(
         "Unable to connect to the server. Please try again."
       );
@@ -97,15 +130,14 @@ export default function SignupPage() {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#261510] text-white">
-
       {/* Background images */}
       <picture>
         <source
           media="(max-width: 767px)"
-          srcSet="/images/login-mobile.png"
+          srcSet="/auth/images/login-mobile.png"
         />
         <img
-          src="/images/login-desktop.png"
+          src="/auth/images/login-desktop.png"
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -130,7 +162,6 @@ export default function SignupPage() {
 
       {/* Signup container */}
       <div className="relative z-10 flex min-h-[calc(100dvh-85px)] items-center justify-center px-5 py-8">
-
         {/* Glass card */}
         <section
           className="
@@ -144,7 +175,6 @@ export default function SignupPage() {
             backdrop-blur-md
           "
         >
-
           {/* Heading */}
           <div className="mb-7 text-center">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-orange-400/40 bg-orange-500/15 px-4 py-2 text-xs font-medium text-orange-200">
@@ -152,7 +182,10 @@ export default function SignupPage() {
             </div>
 
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Join <span className="text-orange-400">EventGo</span>
+              Join{" "}
+              <span className="text-orange-400">
+                EventGo
+              </span>
             </h1>
 
             <p className="mt-3 text-sm leading-relaxed text-white/85 md:text-base">
@@ -166,7 +199,6 @@ export default function SignupPage() {
             onSubmit={handleSubmit}
             className="space-y-4"
           >
-
             {/* Full Name */}
             <div>
               <label
@@ -246,6 +278,7 @@ export default function SignupPage() {
                   onClick={() =>
                     setShowPassword(!showPassword)
                   }
+                  disabled={loading}
                   aria-label={
                     showPassword
                       ? "Hide password"
@@ -289,8 +322,11 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    setShowConfirmPassword(!showConfirmPassword)
+                    setShowConfirmPassword(
+                      !showConfirmPassword
+                    )
                   }
+                  disabled={loading}
                   aria-label={
                     showConfirmPassword
                       ? "Hide confirmation"
@@ -339,7 +375,9 @@ export default function SignupPage() {
                 disabled:hover:translate-y-0
               "
             >
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading
+                ? "Creating Account..."
+                : "Create Account"}
 
               {!loading && (
                 <span className="transition-transform group-hover:translate-x-2">
@@ -352,7 +390,6 @@ export default function SignupPage() {
           {/* Login link */}
           <p className="mt-7 text-center text-sm text-white/90">
             Already have an account?{" "}
-
             <Link
               href="/login"
               className="font-semibold text-orange-300 transition hover:text-orange-200"
@@ -360,7 +397,6 @@ export default function SignupPage() {
               Log In
             </Link>
           </p>
-
         </section>
       </div>
     </main>

@@ -1,0 +1,137 @@
+
+> eventgo-auth@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 132ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1195ms
+  Running TypeScript ...
+  Finished TypeScript in 2.8s ...
+  Collecting page data using 13 workers ...
+
+<--- Last few GCs --->
+
+[8972:000001F7CB8DD000]     2286 ms: Scavenge 31.1 (40.2) -> 25.0 (54.9) MB, pooled: 0 MB, 5.41 / 0.00 ms  (average mu = 1.000, current mu = 1.000) allocation failure; 
+[8972:000001F7CB8DD000]     2332 ms: Mark-Compact 38.6 (65.7) -> 35.9 (103.6) MB, pooled: 0 MB, 9.51 / 0.01 ms  (+ 0.4 ms in 40 steps since start of marking, biggest step 0.1 ms, walltime since start of marking 47 ms) (average mu = 0.996, current mu = 0.9
+FATAL ERROR: Zone Allocation failed - process out of memory
+----- Native stack trace -----
+
+
+<--- Last few GCs --->
+
+[53536:000002A2FD3AF000]     2263 ms: Scavenge 31.8 (40.3) -> 24.7 (53.8) MB, pooled: 0 MB, 6.58 / 0.00 ms  (average mu = 1.000, current mu = 1.000) allocation failure; 
+[53536:000002A2FD3AF000]     2558 ms: Mark-Compact 40.8 (66.2) -> 37.5 (72.3) MB, pooled: 10 MB, 42.61 / 0.01 ms  (+ 0.6 ms in 42 steps since start of marking, biggest step 0.1 ms, walltime since start of marking 206 ms) (average mu = 0.983, current mu = 
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+
+<--- Last few GCs --->
+
+[58012:00000239DE382000]     2104 ms: Scavenge 31.8 (40.8) -> 24.7 (54.0) MB, pooled: 0 MB, 5.49 / 0.00 ms  (average mu = 1.000, current mu = 1.000) allocation failure; 
+[58012:00000239DE382000]     2180 ms: Mark-Compact 25.7 (54.3) -> 22.5 (57.4) MB, pooled: 0 MB, 9.42 / 0.01 ms  (+ 0.2 ms in 3 steps since start of marking, biggest step 0.1 ms, walltime since start of marking 38 ms) (average mu = 0.996, current mu = 0.99
+FATAL ERROR: MarkCompactCollector: young object promotion failed Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+
+<--- Last few GCs --->
+
+[58012:00000239DE382000]     2104 ms: Scavenge 31.8 (40.8) -> 24.7 (54.0) MB, pooled: 0 MB, 5.49 / 0.00 ms  (average mu = 1.000, current mu = 1.000) allocation failure; 
+[58012:00000239DE382000]     2180 ms: Mark-Compact 25.7 (54.3) -> 22.5 (57.4) MB, pooled: 0 MB, 9.42 / 0.01 ms  (+ 0.2 ms in 3 steps since start of marking, biggest step 0.1 ms, walltime since start of marking 38 ms) (average mu = 0.996, current mu = 0.99
+FATAL ERROR: MarkCompactCollector: young object promotion failed Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF6BB1B403F 
+ 2: 00007FF6BBDFFAA7 
+ 3: 00007FF6BB779986 
+ 4: 00007FF6BBDE6AC6 
+ 5: 00007FF6BB890130 
+ 6: 00007FF6BB88E0D5 
+ 7: 00007FF6BB89266B 
+ 8: 00007FF6BB891B33 
+ 9: 00007FF6BB8915D4 
+10: 00007FF6BB88DACB 
+11: 00007FF6BB8926DA 
+12: 00007FF6BB891B33 
+13: 00007FF6BB8915D4 
+14: 00007FF6BB88DACB 
+15: 00007FF6BB8930CF 
+16: 00007FF6BB89279E 
+17: 00007FF6BB891B33 
+18: 00007FF6BB89058A 
+19: 00007FF6BB898DDF 
+20: 00007FF6BB88BDA6 
+21: 00007FF6BB88B37D 
+22: 00007FF6BB889AAB 
+23: 00007FF6BB888DE6 
+24: 00007FF6BB8B3948 
+25: 00007FF6BB8A7960 
+26: 00007FF6BB8BFAE3 
+27: 00007FF6BB8BB66B 
+28: 00007FF6BB8BA83E 
+29: 00007FF6BB8BA4F9 
+30: 00007FF6BB8C2CC0 
+31: 00007FF6BB8B9F66 
+32: 00007FF6BB8BB66B 
+33: 00007FF6BB8BA83E 
+34: 00007FF6BB8C10A2 
+35: 00007FF6BB8BDAC3 
+36: 00007FF6BB8BB6B8 
+37: 00007FF6BB8BA83E 
+38: 00007FF6BB8C0204 
+39: 00007FF6BB8C9E2F 
+40: 00007FF6BB8B4DEB 
+41: 00007FF6BB8B42EA 
+42: 00007FF6BB8A79E7 
+43: 00007FF6BB8CBEE3 
+44: 00007FF6BB8AC354 
+45: 00007FF6BB8B4DEB 
+46: 00007FF6BB8AA82A 
+47: 00007FF6BB8A9A50 
+48: 00007FF6BB8A875A 
+49: 00007FF6BB8A13FE 
+50: 00007FF6BBD7A920 
+51: 00007FF6BBD7B41C 
+52: 00007FF6BB7FDA4B 
+53: 000001F79FE775FA 
+ 1: 00007FF6BB1B403F 
+ 1: 00007FF6BB1B403F 
+ 2: 00007FF6BBDFFAA7 
+ 2: 00007FF6BBDFFAA7 
+ 3: 00007FF6BBC004D7 
+ 3: 00007FF6BBC004D7 
+ 4: 00007FF6BBBDFDEE 
+ 4: 00007FF6BBBDFDEE 
+ 5: 00007FF6BBBD54AD 
+ 5: 00007FF6BBBD54AD 
+ 6: 00007FF6BBBD515C 
+ 6: 00007FF6BBBD515C 
+ 7: 00007FF6BBBD4DA1 
+ 7: 00007FF6BBBD4DA1 
+ 8: 00007FF6BBBE7298 
+ 8: 00007FF6BBBE7298 
+ 9: 00007FF6BC5E0C5F 
+ 9: 00007FF6BC5E0C5F 
+10: 00007FF6BB102E0E 
+10: 00007FF6BB102E0E 
+11: 00007FF6BBE54A36 
+11: 00007FF6BBE54A36 
+12: 00007FF6BD0B5A73 
+12: 00007FF6BD0B5A73 
+13: 00007FFB3A0CCD87 
+13: 00007FFB3A0CCD87 
+14: 00007FFB3C3CCAEC 
+14: 00007FFB3C3CCAEC 
+◇ injected env (5) from ..\eventgo-backend\.env.local
+◇ injected env (5) from ..\eventgo-backend\.env.local
+◇ injected env (5) from ..\eventgo-backend\.env.local
+⨯ Next.js build worker exited with code: 134 and signal: null
+npm error Lifecycle script `build` failed with error:
+npm error code 134
+npm error path C:\Users\omarm\Downloads\EventGo\eventgo-auth
+npm error workspace eventgo-auth@0.1.0
+npm error location C:\Users\omarm\Downloads\EventGo\eventgo-auth
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build

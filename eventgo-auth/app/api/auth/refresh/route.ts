@@ -9,28 +9,29 @@ const COOKIE_NAME = "eventgo_refresh";
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
 function clearRefreshCookies(response: NextResponse) {
-  const baseOptions = {
+  const options = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     maxAge: 0,
   };
 
-  response.cookies.set(COOKIE_NAME, "", {
-    ...baseOptions,
-    path: "/api/auth",
-  });
-
-  response.cookies.set(COOKIE_NAME, "", {
-    ...baseOptions,
-    path: "/",
-  });
+  for (const path of [
+    "/api/auth",
+    "/auth/api/auth",
+    "/",
+  ]) {
+    response.cookies.set(COOKIE_NAME, "", {
+      ...options,
+      path,
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
 
-  if (origin && origin !== request.nextUrl.origin) {
+  if (!origin || origin !== request.nextUrl.origin) {
     return NextResponse.json(
       { message: "Forbidden origin" },
       { status: 403 }
@@ -48,7 +49,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Rotate refresh token
     const session = await refreshSession(refreshToken);
 
     if (!session) {
@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
       );
 
       response.headers.set("Cache-Control", "no-store");
-
       clearRefreshCookies(response);
 
       return response;
@@ -73,23 +72,29 @@ export async function POST(request: NextRequest) {
 
     response.headers.set("Cache-Control", "no-store");
 
-    // Remove old cookie using previous path
-    response.cookies.set(COOKIE_NAME, "", {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
+    };
+
+    response.cookies.set(COOKIE_NAME, "", {
+      ...cookieOptions,
       path: "/api/auth",
       maxAge: 0,
     });
 
-    // Store rotated token with new path
+    response.cookies.set(COOKIE_NAME, "", {
+      ...cookieOptions,
+      path: "/auth/api/auth",
+      maxAge: 0,
+    });
+
     response.cookies.set(
       COOKIE_NAME,
       session.refreshToken,
       {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        ...cookieOptions,
         path: "/",
         maxAge: REFRESH_MAX_AGE,
       }

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error) {
       if (error.message === "Email already registered") {
         return NextResponse.json(
-          { error: error.message },
+          { message: error.message },
           { status: 409 }
         );
       }
@@ -36,14 +36,14 @@ export async function POST(request: NextRequest) {
         error.message.startsWith("Password must")
       ) {
         return NextResponse.json(
-          { error: error.message },
+          { message: error.message },
           { status: 400 }
         );
       }
     }
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 }
     );
   }
