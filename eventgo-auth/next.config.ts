@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
     "@eventgo/backend",
   ],
 
+  experimental: {
+    cpus: 2,
+  },
+
   turbopack: {
     rules: {
       "*.css": {
