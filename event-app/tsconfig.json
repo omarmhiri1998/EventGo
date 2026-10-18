@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"],
+      "@eventgo/backend": ["../eventgo-backend/src/index.ts"],
+      "@eventgo/backend/*": ["../eventgo-backend/src/*"]
     }
   },
   "include": [

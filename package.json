@@ -1,0 +1,24 @@
+
+{
+  "name": "eventgo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "event-app",
+    "eventgo-admin",
+    "eventgo-auth",
+    "eventgo-backend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n PROXY,APP,ADMIN,AUTH \"npm run proxy\" \"npm run app\" \"npm run admin\" \"npm run auth\"",
+    "proxy": "node proxy.cjs",
+    "app": "npm run dev -w event-app -- -p 3003",
+    "admin": "npm run dev -w eventgo-admin -- -p 3001",
+    "auth": "npm run dev -w eventgo-auth -- -p 3002"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "http-proxy": "^1.18.1"
+  }
+}

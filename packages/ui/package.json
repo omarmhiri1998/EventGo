@@ -1,0 +1,26 @@
+{
+  "name": "@eventgo/ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./Brand": "./src/atoms/Brand/Brand.tsx",
+  "./Button": "./src/atoms/Button/button.tsx",
+  "./IconButton": "./src/atoms/IconButton/IconButton.tsx",
+  "./Typography": "./src/atoms/Typography/Typography.tsx",
+"./TrendChip": "./src/atoms/TrendChip/TrendChip.tsx",
+"./EventSearchBar": "./src/organisms/EventSearchBar.tsx",
+"./SearchFilters": "./src/molecules/SearchFilters/SearchFilters.tsx",
+"./HeroSection": "./src/organisms/HeroSection/HeroSection.tsx",
+"./EventFilters": "./src/types/event.ts",
+"./CategoriesSection": "./src/organisms/CategoriesSection/CategoriesSection.tsx",
+"./PopularEventsSection": "./src/organisms/PopularEventsSection/PopularEventsSection.tsx",
+"./FeaturedBanner": "./src/organisms/FeaturedBanner/FeaturedBanner.tsx",
+"./Footer": "./src/organisms/Footer/Footer.tsx"
+
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
