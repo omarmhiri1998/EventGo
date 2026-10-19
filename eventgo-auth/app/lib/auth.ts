@@ -1,28 +1,35 @@
-
 import "server-only";
 
 import { cookies } from "next/headers";
 
-export type AuthSession = {
+type AuthSession = {
   authenticated: true;
   userId: string;
   role: "user" | "admin";
 };
 
-const AUTH_URL =
-  process.env.EVENTGO_AUTH_URL ||
-  "http://localhost:3000/auth/api/auth/session";
+export async function getSession(): Promise<AuthSession | null> {
+  const cookieStore = await cookies();
+  const refreshToken = cookieStore.get("eventgo_refresh")?.value;
 
-async function validateAuthCookie(
-  cookieHeader: string
-): Promise<AuthSession | null> {
-  const response = await fetch(AUTH_URL, {
-    method: "GET",
-    headers: {
-      Cookie: cookieHeader,
-    },
-    cache: "no-store",
-  });
+  if (!refreshToken) {
+    return null;
+  }
+
+  const authUrl =
+    process.env.EVENTGO_AUTH_URL ??
+    "http://127.0.0.1:3002";
+
+  const response = await fetch(
+    `${authUrl}/auth/api/auth/session`,
+    {
+      method: "GET",
+      headers: {
+        Cookie: `eventgo_refresh=${encodeURIComponent(refreshToken)}`,
+      },
+      cache: "no-store",
+    }
+  );
 
   if (response.status === 401) {
     return null;
@@ -37,8 +44,8 @@ async function validateAuthCookie(
   const data: unknown = await response.json();
 
   if (
+    !data ||
     typeof data !== "object" ||
-    data === null ||
     !("authenticated" in data) ||
     data.authenticated !== true ||
     !("userId" in data) ||
@@ -54,31 +61,4 @@ async function validateAuthCookie(
     userId: data.userId,
     role: data.role,
   };
-}
-
-export async function getSession(): Promise<AuthSession | null> {
-  const cookieStore = await cookies();
-
-  const refreshToken =
-    cookieStore.get("eventgo_refresh")?.value;
-
-  if (!refreshToken) {
-    return null;
-  }
-
-  return validateAuthCookie(
-    `eventgo_refresh=${encodeURIComponent(refreshToken)}`
-  );
-}
-
-export async function requireAuth(
-  request: Request
-): Promise<AuthSession | null> {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  return validateAuthCookie(cookieHeader);
 }
