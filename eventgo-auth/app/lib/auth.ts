@@ -1,4 +1,3 @@
-
 import "server-only";
 
 import { cookies } from "next/headers";
@@ -9,20 +8,30 @@ export type AuthSession = {
   role: "user" | "admin";
 };
 
-const AUTH_URL =
-  process.env.EVENTGO_AUTH_URL ||
-  "http://localhost:3000/auth/api/auth/session";
+const AUTH_SESSION_URL =
+  process.env.EVENTGO_AUTH_SESSION_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://eventgo-auth.vercel.app/auth/api/auth/session"
+    : "http://localhost:3002/auth/api/auth/session");
 
 async function validateAuthCookie(
   cookieHeader: string
 ): Promise<AuthSession | null> {
-  const response = await fetch(AUTH_URL, {
-    method: "GET",
-    headers: {
-      Cookie: cookieHeader,
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(AUTH_SESSION_URL, {
+      method: "GET",
+      headers: {
+        Cookie: cookieHeader,
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("Authentication service connection failed:", error);
+
+    throw new Error("Authentication service unavailable");
+  }
 
   if (response.status === 401) {
     return null;
