@@ -1,4 +1,3 @@
-
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -41,6 +40,18 @@ export const pool = new Pool({
 });
 
 export async function connectDB() {
-  await pool.query("SELECT 1");
-  console.log("PostgreSQL connected");
+  const result = await pool.query(`
+    SELECT
+      current_database() AS database_name,
+      current_schema() AS schema_name,
+      current_user AS database_user,
+      (
+        SELECT COUNT(*)::int
+        FROM public.users
+      ) AS total_users
+  `);
+
+  console.log("EVENTGO DATABASE:", result.rows[0]);
+
+  return result.rows[0];
 }

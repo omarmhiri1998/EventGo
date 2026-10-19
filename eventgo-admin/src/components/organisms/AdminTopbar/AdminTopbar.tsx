@@ -34,6 +34,12 @@ export function AdminTopbar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
+  // Shared entry point for EventGo applications
+  const siteUrl =
+    process.env.NODE_ENV === "production"
+      ? "https://event-app-nine-rose.vercel.app"
+      : "http://localhost:3000";
+
   const currentPage =
     adminNavigation.find((item) =>
       item.href === "/"
@@ -49,21 +55,30 @@ export function AdminTopbar() {
     setLogoutError("");
 
     try {
-      const response = await fetch("/auth/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-      });
+      const response = await fetch(
+         "/auth/api/auth/logout",
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`Logout failed: HTTP ${response.status}`);
+        throw new Error(
+          `Logout failed: HTTP ${response.status}`
+        );
       }
 
-      // Navigate in the same browser tab.
-      window.location.replace("/auth/login");
+      // Navigate in the same browser tab
+      window.location.replace(`${siteUrl}/auth/login`);
     } catch (error) {
       console.error("Logout error:", error);
-      setLogoutError("Logout failed. Please try again.");
+
+      setLogoutError(
+        "Logout failed. Please try again."
+      );
+
       setLoggingOut(false);
     }
   }
@@ -118,7 +133,7 @@ export function AdminTopbar() {
         <div className="flex shrink-0 items-center gap-2 lg:gap-3">
           {/* VIEW WEBSITE */}
           <a
-            href="http://localhost:3000/"
+            href={siteUrl}
             aria-label="View EventGo Website"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[#08111D] transition hover:bg-slate-50 sm:px-4"
           >

@@ -1,5 +1,9 @@
-
 import type { NextConfig } from "next";
+
+const authUrl =
+  process.env.NODE_ENV === "production"
+    ? "https://eventgo-auth.vercel.app"
+    : "http://localhost:3002";
 
 const nextConfig: NextConfig = {
   basePath: "/admin",
@@ -15,6 +19,16 @@ const nextConfig: NextConfig = {
 
   cacheComponents: true,
   partialPrefetching: true,
+
+  async rewrites() {
+    return [
+      {
+        source: "/admin/api/auth/logout",
+        destination: `${authUrl}/auth/api/auth/logout`,
+        basePath: false,
+      },
+    ];
+  },
 
   turbopack: {
     rules: {

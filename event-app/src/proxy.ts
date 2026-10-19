@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Auth and Admin have their own applications.
   if (
     pathname === "/auth" ||
     pathname.startsWith("/auth/") ||
@@ -13,6 +14,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const loginUrl = new URL("/auth/login", request.url);
+
   const refreshToken = request.cookies.get("eventgo_refresh")?.value;
 
   if (!refreshToken) {
@@ -22,7 +24,9 @@ export async function proxy(request: NextRequest) {
   try {
     const authUrl =
       process.env.EVENTGO_AUTH_SESSION_URL ||
-      "https://eventgo-auth.vercel.app/auth/api/auth/session";
+      (process.env.NODE_ENV === "development"
+        ? "http://localhost:3002/auth/api/auth/session"
+        : "https://eventgo-auth.vercel.app/auth/api/auth/session");
 
     const response = await fetch(authUrl, {
       method: "GET",
@@ -43,6 +47,8 @@ export async function proxy(request: NextRequest) {
       session === null ||
       !("authenticated" in session) ||
       session.authenticated !== true ||
+      !("userId" in session) ||
+      typeof session.userId !== "string" ||
       !("role" in session) ||
       (session.role !== "user" && session.role !== "admin")
     ) {
@@ -52,6 +58,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Session verification failed:", error);
+
     return NextResponse.redirect(loginUrl);
   }
 }
