@@ -20,6 +20,11 @@ const allowedOrigins = [
 ];
 
 if (!origin || !allowedOrigins.includes(origin)) {
+  console.error("Login rejected: invalid origin", {
+    origin,
+    expectedOrigins: allowedOrigins,
+  });
+
   return NextResponse.json(
     { message: "Forbidden origin" },
     { status: 403 }
