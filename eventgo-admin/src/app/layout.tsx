@@ -26,8 +26,8 @@ export default async function RootLayout({
   const session = await getSession();
 
   if (!session) {
-    redirect("/auth/login");
-  }
+  redirect("https://event-app-nine-rose.vercel.app/auth/login");
+}
 
   if (session.role !== "admin") {
     redirect("/");
