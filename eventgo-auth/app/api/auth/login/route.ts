@@ -10,14 +10,21 @@ const COOKIE_NAME = "eventgo_refresh";
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin");
+ const origin = request.headers.get("origin");
 
-  if (!origin || origin !== request.nextUrl.origin) {
-    return NextResponse.json(
-      { message: "Forbidden origin" },
-      { status: 403 }
-    );
-  }
+const allowedOrigins = [
+  "http://localhost:3002",
+  "http://localhost:3000",
+  "https://eventgo-auth.vercel.app",
+  "https://event-app-nine-rose.vercel.app",
+];
+
+if (!origin || !allowedOrigins.includes(origin)) {
+  return NextResponse.json(
+    { message: "Forbidden origin" },
+    { status: 403 }
+  );
+}
 
   let body: unknown;
 
