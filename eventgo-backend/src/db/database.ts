@@ -13,6 +13,16 @@ dotenv.config({
 
 const databaseUrl = process.env.DATABASE_URL;
 
+console.log("DB CONNECTION CHECK:", {
+  databaseUrlConfigured: Boolean(databaseUrl),
+  databaseHost: databaseUrl
+    ? new URL(databaseUrl).hostname
+    : process.env.DB_HOST,
+  databaseName: databaseUrl
+    ? new URL(databaseUrl).pathname.slice(1)
+    : process.env.DB_NAME,
+});
+
 export const pool = new Pool({
   ...(databaseUrl
     ? {
