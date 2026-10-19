@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { redirect } from "next/navigation";
@@ -27,11 +26,11 @@ export default async function RootLayout({
   const session = await getSession();
 
   if (!session) {
-    redirect("http://localhost:3000/auth/login");
+    redirect("/auth/login");
   }
 
   if (session.role !== "admin") {
-    redirect("http://localhost:3000/");
+    redirect("/");
   }
 
   return (

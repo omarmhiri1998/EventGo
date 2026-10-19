@@ -1,4 +1,3 @@
-
 import "./globals.css";
 
 import { Geist } from "next/font/google";
@@ -26,7 +25,7 @@ export default async function RootLayout({
   const session = await getSession();
 
   if (!session) {
-    redirect("http://localhost:3000/auth/login");
+    redirect("/auth/login");
   }
 
   return (
