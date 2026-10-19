@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -62,33 +61,22 @@ export default function LoginPage() {
       // Refresh Token is stored in an HttpOnly Cookie.
       // Never store access or refresh tokens in localStorage.
 
-      const adminUrl =
-        process.env.NEXT_PUBLIC_ADMIN_URL ||
-        (process.env.NODE_ENV === "development"
-          ? "http://localhost:3001"
-          : undefined);
+      const siteUrl =
+        process.env.NODE_ENV === "production"
+          ? "https://event-app-nine-rose.vercel.app"
+          : "http://localhost:3000";
 
-      const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (process.env.NODE_ENV === "development"
-          ? "http://localhost:3000"
-          : undefined);
-
-      const destination =
-        data.user.role === "admin"
-          ? adminUrl
-          : data.user.role === "user"
-            ? appUrl
-            : undefined;
-
-      if (!destination) {
-        setError(
-          "Application URL is not configured. Please contact support."
-        );
+      if (data.user.role === "admin") {
+        window.location.replace(`${siteUrl}/admin`);
         return;
       }
 
-      window.location.replace(destination);
+      if (data.user.role === "user") {
+        window.location.replace(siteUrl);
+        return;
+      }
+
+      setError("Unknown user role");
     } catch {
       setError("Unable to connect to the server");
     } finally {
