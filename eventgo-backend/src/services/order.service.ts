@@ -1,6 +1,11 @@
+
 import { createHash, randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "../db/database";
+
+// ======================================
+// ADMIN ORDER TYPES
+// ======================================
 
 export interface AdminOrder {
   id: string;
@@ -26,6 +31,10 @@ export interface OrdersResult {
     revenueEUR: number;
   };
 }
+
+// ======================================
+// GET ADMIN ORDERS
+// ======================================
 
 export async function getAdminOrders(
   page = 1,
@@ -129,7 +138,8 @@ export async function getAdminOrders(
         paid_orders: string;
         pending_orders: string;
         revenue_eur: string;
-      }>(`
+      }>(
+        `
         SELECT
           COUNT(*)::text AS total_orders,
           COUNT(*) FILTER (
@@ -146,7 +156,8 @@ export async function getAdminOrders(
             0
           )::text AS revenue_eur
         FROM orders
-      `),
+        `
+      ),
     ]);
 
   const total = Number(countResult.rows[0].total);
@@ -177,6 +188,10 @@ export async function getAdminOrders(
     },
   };
 }
+
+// ======================================
+// DEMO ORDER TYPES
+// ======================================
 
 export interface DemoOrderTicket {
   id: string;
@@ -209,8 +224,16 @@ interface CheckoutTicketRow {
   starts_at: Date | string;
 }
 
+// ======================================
+// VALIDATION
+// ======================================
+
 const CHECKOUT_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ======================================
+// PRICE HELPERS
+// ======================================
 
 function priceToCents(price: string): bigint {
   if (!/^\d+(\.\d{1,2})?$/.test(price)) {
@@ -227,12 +250,17 @@ function priceToCents(price: string): bigint {
 
 function centsToPrice(cents: bigint): string {
   const whole = cents / BigInt(100);
-const decimal = (cents % BigInt(100))
+
+  const decimal = (cents % BigInt(100))
     .toString()
     .padStart(2, "0");
 
   return `${whole}.${decimal}`;
 }
+
+// ======================================
+// LOCK TICKET TYPE
+// ======================================
 
 async function lockTicketType(
   client: PoolClient,
@@ -263,6 +291,10 @@ async function lockTicketType(
   return result.rows[0];
 }
 
+// ======================================
+// GET SOLD COUNT
+// ======================================
+
 async function getSoldCount(
   client: PoolClient,
   ticketTypeId: string
@@ -281,6 +313,10 @@ async function getSoldCount(
   return Number(result.rows[0].sold);
 }
 
+// ======================================
+// CREATE DEMO ORDER
+// ======================================
+
 export async function createDemoOrder(
   userId: string
 ): Promise<DemoOrderResult> {
@@ -295,6 +331,8 @@ export async function createDemoOrder(
   try {
     await client.query("BEGIN");
     transactionStarted = true;
+
+    // 1. Lock active cart
 
     const cartResult = await client.query<{
       id: string;
@@ -314,6 +352,8 @@ export async function createDemoOrder(
     if (!cartId) {
       throw new Error("Your cart is empty");
     }
+
+    // 2. Get cart items
 
     const cartItemsResult =
       await client.query<CheckoutCartRow>(
@@ -344,6 +384,8 @@ export async function createDemoOrder(
       eventId: string;
       eventTitle: string;
     }> = [];
+
+    // 3. Validate tickets and availability
 
     for (const item of items) {
       if (
@@ -416,6 +458,8 @@ export async function createDemoOrder(
 
     const totalAmount = centsToPrice(totalCents);
 
+    // 4. Create order
+
     const orderResult = await client.query<{
       id: string;
     }>(
@@ -432,79 +476,52 @@ export async function createDemoOrder(
       [userId, totalAmount, currency]
     );
 
-    const orderId = orderResult.rows[0].id;
+    const orderId = orderResult.rows[0]?.id;
 
-   
-const createdTickets: DemoOrderTicket[] = [];
+    if (!orderId) {
+      throw new Error("Unable to create order");
+    }
 
-for (const item of verifiedItems) {
-  const qrToken = randomBytes(32).toString("hex");
+    // 5. Create one QR per ticket group
 
-  const qrTokenHash = createHash("sha256")
-    .update(qrToken)
-    .digest("hex");
-
-  await client.query(
-    `
-    INSERT INTO ticket_groups (
-      order_id,
-      ticket_type_id,
-      quantity,
-      qr_token,
-      qr_token_hash,
-      status
-    )
-    VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
-    `,
-    [
-      orderId,
-      item.ticketTypeId,
-      item.quantity,
-      qrToken,
-      qrTokenHash,
-    ]
-  );
-
-  for (
-    let index = 0;
-    index < item.quantity;
-    index++
-  ) {
-    const ticketResult = await client.query<{
-      id: string;
-    }>(
-      `
-      INSERT INTO tickets (
-        order_id,
-        ticket_type_id,
-        status,
-        issued_at
-      )
-      VALUES ($1, $2, 'ISSUED', NOW())
-      RETURNING id
-      `,
-      [orderId, item.ticketTypeId]
-    );
-
-    createdTickets.push({
-      id: ticketResult.rows[0].id,
-      ticketTypeId: item.ticketTypeId,
-      eventId: item.eventId,
-      eventTitle: item.eventTitle,
-      qrToken,
-    });
-  }
-}
-
+    const createdTickets: DemoOrderTicket[] = [];
 
     for (const item of verifiedItems) {
-      for (let index = 0; index < item.quantity; index++) {
-        const qrToken = randomBytes(32).toString("hex");
+      const qrToken = randomBytes(32).toString("hex");
 
-        const qrTokenHash = createHash("sha256")
-          .update(qrToken)
-          .digest("hex");
+      const qrTokenHash = createHash("sha256")
+        .update(qrToken)
+        .digest("hex");
 
+      await client.query(
+        `
+        INSERT INTO ticket_groups (
+          order_id,
+          ticket_type_id,
+          quantity,
+          qr_token,
+          qr_token_hash,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+        `,
+        [
+          orderId,
+          item.ticketTypeId,
+          item.quantity,
+          qrToken,
+          qrTokenHash,
+        ]
+      );
+
+      // Issue only the purchased quantity.
+      // All tickets in this group share one QR.
+
+      for (
+        let index = 0;
+        index < item.quantity;
+        index++
+      ) {
         const ticketResult = await client.query<{
           id: string;
         }>(
@@ -512,24 +529,23 @@ for (const item of verifiedItems) {
           INSERT INTO tickets (
             order_id,
             ticket_type_id,
-            qr_token_hash,
-            qr_token,
             status,
             issued_at
           )
-          VALUES ($1, $2, $3, $4, 'ISSUED', NOW())
+          VALUES ($1, $2, 'ISSUED', NOW())
           RETURNING id
           `,
-          [
-            orderId,
-            item.ticketTypeId,
-            qrTokenHash,
-            qrToken,
-          ]
+          [orderId, item.ticketTypeId]
         );
 
+        const ticketId = ticketResult.rows[0]?.id;
+
+        if (!ticketId) {
+          throw new Error("Unable to create ticket");
+        }
+
         createdTickets.push({
-          id: ticketResult.rows[0].id,
+          id: ticketId,
           ticketTypeId: item.ticketTypeId,
           eventId: item.eventId,
           eventTitle: item.eventTitle,
@@ -537,6 +553,8 @@ for (const item of verifiedItems) {
         });
       }
     }
+
+    // 6. Mark cart as checked out
 
     await client.query(
       `
@@ -547,6 +565,8 @@ for (const item of verifiedItems) {
       `,
       [cartId]
     );
+
+    // 7. Commit transaction
 
     await client.query("COMMIT");
     transactionStarted = false;
@@ -560,7 +580,14 @@ for (const item of verifiedItems) {
     };
   } catch (error) {
     if (transactionStarted) {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(
+          "Demo order rollback failed:",
+          rollbackError
+        );
+      }
     }
 
     throw error;
@@ -568,6 +595,10 @@ for (const item of verifiedItems) {
     client.release();
   }
 }
+
+// ======================================
+// GET DEMO ORDER FOR USER
+// ======================================
 
 export async function getDemoOrderForUser(
   userId: string,
