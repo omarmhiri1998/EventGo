@@ -1,5 +1,6 @@
 
 import { pool } from "../../../eventgo-backend/src/db/database";
+
 import {
   createAccessToken,
   createRefreshToken,
@@ -10,6 +11,10 @@ type SessionUser = {
   id: string;
   role: string;
 };
+
+// ======================================
+// CREATE SESSION
+// ======================================
 
 export async function createSession(user: SessionUser) {
   const accessToken = await createAccessToken(user);
@@ -34,12 +39,21 @@ export async function createSession(user: SessionUser) {
   };
 }
 
-export async function refreshSession(oldRefreshToken: string) {
+// ======================================
+// REFRESH SESSION
+// ======================================
+
+export async function refreshSession(
+  oldRefreshToken: string
+) {
   const oldHash = hashRefreshToken(oldRefreshToken);
   const client = await pool.connect();
 
+  let transactionOpen = false;
+
   try {
     await client.query("BEGIN");
+    transactionOpen = true;
 
     const result = await client.query<{
       id: string;
@@ -62,6 +76,7 @@ export async function refreshSession(oldRefreshToken: string) {
 
     if (!session) {
       await client.query("ROLLBACK");
+      transactionOpen = false;
       return null;
     }
 
@@ -89,24 +104,43 @@ export async function refreshSession(oldRefreshToken: string) {
       [session.user_id, newHash]
     );
 
-    await client.query("COMMIT");
+    // Create access token BEFORE COMMIT.
+    // If token generation fails, the transaction
+    // can still be rolled back.
 
     const accessToken = await createAccessToken({
       id: session.user_id,
       role: session.role,
     });
 
+    await client.query("COMMIT");
+    transactionOpen = false;
+
     return {
       accessToken,
       refreshToken: newRefreshToken,
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (transactionOpen) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(
+          "Refresh session rollback failed:",
+          rollbackError
+        );
+      }
+    }
+
     throw error;
   } finally {
     client.release();
   }
 }
+
+// ======================================
+// REVOKE SESSION
+// ======================================
 
 export async function revokeSession(
   refreshToken: string
@@ -123,6 +157,10 @@ export async function revokeSession(
     [tokenHash]
   );
 }
+
+// ======================================
+// VALIDATE SESSION
+// ======================================
 
 export type ValidSession = {
   userId: string;
@@ -169,4 +207,3 @@ export async function validateSession(
     role: session.role,
   };
 }
-
