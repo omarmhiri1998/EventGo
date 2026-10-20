@@ -1,4 +1,3 @@
-
 {
   "name": "eventgo",
   "version": "1.0.0",
@@ -15,10 +14,15 @@
     "proxy": "node proxy.cjs",
     "app": "npm run dev -w event-app -- -p 3003",
     "admin": "npm run dev -w eventgo-admin -- -p 3001",
-    "auth": "npm run dev -w eventgo-auth -- -p 3002"
+    "auth": "npm run dev -w eventgo-auth -- -p 3002",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
-    "http-proxy": "^1.18.1"
+    "http-proxy": "^1.18.1",
+    "vitest": "^5.0.5"
   }
 }
