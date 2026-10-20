@@ -7,6 +7,10 @@ const UUID_PATTERN =
 
 const MAX_QUANTITY = 10;
 
+// ======================================
+// TYPES
+// ======================================
+
 export interface CartItem {
   id: string;
   ticketTypeId: string;
@@ -44,6 +48,10 @@ interface CartItemRow {
   is_demo: boolean;
 }
 
+// ======================================
+// VALIDATION
+// ======================================
+
 function validateUserId(userId: string) {
   if (!UUID_PATTERN.test(userId)) {
     throw new Error("Invalid user ID");
@@ -66,6 +74,10 @@ function validateQuantity(quantity: number) {
   }
 }
 
+// ======================================
+// GET ACTIVE CART ID
+// ======================================
+
 async function getActiveCartId(
   client: PoolClient,
   userId: string,
@@ -84,7 +96,8 @@ async function getActiveCartId(
       [userId]
     );
 
-    return result.rows[0].id;
+    // Handle an unexpected empty result safely.
+    return result.rows[0]?.id ?? null;
   }
 
   const result = await client.query<{ id: string }>(
@@ -100,6 +113,10 @@ async function getActiveCartId(
 
   return result.rows[0]?.id ?? null;
 }
+
+// ======================================
+// GET AVAILABLE QUANTITY
+// ======================================
 
 async function getAvailableQuantity(
   client: PoolClient,
@@ -139,6 +156,10 @@ async function getAvailableQuantity(
     ticket.quantity - Number(ticket.sold)
   );
 }
+
+// ======================================
+// GET CART
+// ======================================
 
 export async function getCart(
   userId: string
@@ -204,7 +225,9 @@ export async function getCart(
         eventId: row.event_id,
         eventTitle: row.event_title,
         eventCategory: row.event_category,
-        eventDate: new Date(row.event_date).toISOString(),
+        eventDate: new Date(
+          row.event_date
+        ).toISOString(),
         city: row.city,
         ticketName: row.ticket_name,
         unitPrice: row.unit_price,
@@ -218,6 +241,10 @@ export async function getCart(
     client.release();
   }
 }
+
+// ======================================
+// ADD TO CART
+// ======================================
 
 export async function addToCart(
   userId: string,
@@ -305,6 +332,10 @@ export async function addToCart(
   return getCart(userId);
 }
 
+// ======================================
+// UPDATE CART ITEM QUANTITY
+// ======================================
+
 export async function updateCartItemQuantity(
   userId: string,
   ticketTypeId: string,
@@ -369,6 +400,10 @@ export async function updateCartItemQuantity(
 
   return getCart(userId);
 }
+
+// ======================================
+// REMOVE FROM CART
+// ======================================
 
 export async function removeFromCart(
   userId: string,
