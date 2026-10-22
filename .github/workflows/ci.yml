@@ -43,13 +43,15 @@ jobs:
         run: npm run test:unit
 
   # ==========================================
-  # 2. INTEGRATION TESTS
+  # 2. READ-ONLY INTEGRATION TESTS
   # ==========================================
 
   integration-tests:
     name: Read-Only Integration Tests
     runs-on: ubuntu-latest
 
+    # Do not expose database secrets
+    # to pull request code.
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch'
@@ -117,11 +119,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ======================================
+      # BUILD EVENT APP
+      # ======================================
+
       - name: Build Event App
         run: npm run build --workspace=event-app
 
+      # ======================================
+      # BUILD AUTH APP
+      # ======================================
+
       - name: Build Auth App
-        run: npm run build --workspace=eventgo-auth
+        shell: bash
+        run: |
+          # Generate independent temporary keys.
+          # Used only during this CI build.
+
+          export JWT_ACCESS_SECRET="$(openssl rand -hex 32)"
+          export JWT_REFRESH_SECRET="$(openssl rand -hex 32)"
+
+          npm run build --workspace=eventgo-auth
+
+      # ======================================
+      # BUILD ADMIN APP
+      # ======================================
 
       - name: Build Admin App
         run: npm run build --workspace=eventgo-admin
