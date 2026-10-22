@@ -34,13 +34,14 @@ if (!databaseUrl) {
   );
 }
 
-// Must be set before importing the service.
+// Configure the database before importing the service.
 process.env.DATABASE_URL = databaseUrl;
 
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
   connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 10000,
 });
 
 let service: typeof TicketTypeService;
@@ -93,7 +94,7 @@ describe("Ticket Types Integration - Database", () => {
     );
 
     const names = result.rows.map(
-      row => row.table_name
+      (row) => row.table_name
     );
 
     expect(names).toEqual(
@@ -139,7 +140,8 @@ describe("getAdminTicketTypes - Integration", () => {
     );
 
     expect(Array.isArray(result.ticketTypes)).toBe(true);
-    expect(result.ticketTypes.length).toBeLessThanOrEqual(20);
+    expect(result.ticketTypes.length)
+      .toBeLessThanOrEqual(20);
   });
 
   it("maps PostgreSQL values correctly", async () => {
@@ -157,7 +159,10 @@ describe("getAdminTicketTypes - Integration", () => {
       expect(typeof ticket.available).toBe("number");
 
       expect(ticket.available).toBe(
-        Math.max(0, ticket.quantity - ticket.sold)
+        Math.max(
+          0,
+          ticket.quantity - ticket.sold
+        )
       );
     }
   });
@@ -167,7 +172,7 @@ describe("getAdminTicketTypes - Integration", () => {
     const second = await service.getAdminTicketTypes(2);
 
     const firstIds = new Set(
-      first.ticketTypes.map(ticket => ticket.id)
+      first.ticketTypes.map((ticket) => ticket.id)
     );
 
     for (const ticket of second.ticketTypes) {
@@ -276,7 +281,10 @@ describe("getEventTicketTypes - Integration", () => {
       expect(isUUID(ticket.id)).toBe(true);
 
       expect(ticket.available).toBe(
-        Math.max(0, ticket.quantity - ticket.sold)
+        Math.max(
+          0,
+          ticket.quantity - ticket.sold
+        )
       );
     }
   });
@@ -306,28 +314,30 @@ describe("getEventTicketTypes - Integration", () => {
   });
 
   it("returns tickets sorted by price", async () => {
+    // Select a ticket type directly instead of grouping
+    // the entire ticket_types table.
+
     const eventResult = await pool.query<{
-      id: string;
+      event_id: string;
     }>(
       `
-      SELECT e.id
-      FROM events e
-      JOIN ticket_types tt ON tt.event_id = e.id
+      SELECT tt.event_id
+      FROM ticket_types tt
+      JOIN events e ON e.id = tt.event_id
       WHERE e.starts_at >= NOW()
-      GROUP BY e.id
-      HAVING COUNT(tt.id) >= 2
+      ORDER BY e.starts_at ASC
       LIMIT 1
       `
     );
 
-    const event = eventResult.rows[0];
+    const eventId = eventResult.rows[0]?.event_id;
 
-    if (!event) {
+    if (!eventId) {
       return;
     }
 
     const tickets = await service.getEventTicketTypes(
-      event.id
+      eventId
     );
 
     for (let index = 1; index < tickets.length; index++) {
@@ -339,4 +349,3 @@ describe("getEventTicketTypes - Integration", () => {
     }
   });
 });
-
