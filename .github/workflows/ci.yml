@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   # ==========================================
-  # UNIT TESTS
+  # 1. UNIT TESTS
   # ==========================================
 
   unit-tests:
@@ -40,18 +40,16 @@ jobs:
         run: npm ci
 
       - name: Run Unit Tests
-        run: npx vitest run --project unit
+        run: npm run test:unit
 
   # ==========================================
-  # READ-ONLY INTEGRATION TESTS
+  # 2. INTEGRATION TESTS
   # ==========================================
 
   integration-tests:
     name: Read-Only Integration Tests
     runs-on: ubuntu-latest
 
-    # Do not expose database credentials
-    # to pull request code.
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch'
@@ -92,3 +90,38 @@ jobs:
             eventgo-backend/tests/integration/ticket-type.service.integration.test.ts \
             eventgo-backend/tests/integration/analytics.service.integration.test.ts \
             eventgo-backend/tests/integration/dashboard.service.integration.test.ts
+
+  # ==========================================
+  # 3. FRONTEND BUILD
+  # ==========================================
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Event App
+        run: npm run build --workspace=event-app
+
+      - name: Build Auth App
+        run: npm run build --workspace=eventgo-auth
+
+      - name: Build Admin App
+        run: npm run build --workspace=eventgo-admin
