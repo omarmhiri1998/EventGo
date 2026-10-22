@@ -1,4 +1,4 @@
-
+﻿
 import {
   describe,
   it,
@@ -20,11 +20,12 @@ const parsed = dotenv.config({
   path: envPath,
 }).parsed;
 
-const databaseUrl = parsed?.DATABASE_URL;
+const databaseUrl =
+  process.env.DATABASE_URL || parsed?.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
-    "DATABASE_URL is missing from eventgo-backend/.env.local"
+    "DATABASE_URL is missing from environment variables or .env.local"
   );
 }
 
@@ -106,3 +107,4 @@ describe("Authentication Integration Tests - Read Only", () => {
     ).rejects.toThrow("Invalid email or password");
   });
 });
+

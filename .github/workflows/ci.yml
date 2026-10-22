@@ -37,3 +37,45 @@ jobs:
 
       - name: Run Unit Tests
         run: npx vitest run --project unit
+
+  integration-tests:
+    name: Read-Only Integration Tests
+    runs-on: ubuntu-latest
+
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
+
+    timeout-minutes: 20
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check database connection configuration
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is missing"
+            exit 1
+          fi
+
+      - name: Run selected Integration Tests
+        run: |
+          npx vitest run --project integration \
+            eventgo-backend/tests/integration/auth.integration.test.ts \
+            eventgo-backend/tests/integration/event.service.integration.test.ts \
+            eventgo-backend/tests/integration/ticket-type.service.integration.test.ts \
+            eventgo-backend/tests/integration/analytics.service.integration.test.ts \
+            eventgo-backend/tests/integration/dashboard.service.integration.test.ts

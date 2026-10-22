@@ -1,4 +1,4 @@
-
+﻿
 import {
   afterAll,
   beforeAll,
@@ -26,7 +26,7 @@ const parsed = dotenv.config({
   path: envPath,
 }).parsed;
 
-const databaseUrl = parsed?.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL || parsed?.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
@@ -349,3 +349,4 @@ describe("getEventTicketTypes - Integration", () => {
     }
   });
 });
+
