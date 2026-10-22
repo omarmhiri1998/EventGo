@@ -56,7 +56,7 @@ export function AdminTopbar() {
 
     try {
       const response = await fetch(
-         "/auth/api/auth/logout",
+         "/admin/api/auth/logout",
         {
           method: "POST",
           credentials: "include",
