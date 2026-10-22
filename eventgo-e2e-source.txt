@@ -1,0 +1,5003 @@
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\cart\page.tsx =====
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+
+import {
+  ArrowLeft,
+  ArrowRight,
+  LoaderCircle,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
+
+import {
+  getCartAction,
+  removeFromCartAction,
+  updateCartQuantityAction,
+} from "@/app/actions/cart.actions";
+
+type CartResult = Awaited<
+  ReturnType<typeof getCartAction>
+>;
+
+type CartData = NonNullable<CartResult["cart"]>;
+type CartItem = CartData["items"][number];
+
+function formatPrice(amount: number, currency: string) {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
+
+export default function CartPage() {
+  const [cart, setCart] = useState<CartData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const loadCart = useCallback(async () => {
+    try {
+      const response = await getCartAction();
+      setCart(response.cart);
+      setError(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load your cart."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCart();
+  }, [loadCart]);
+
+  function notifyCartChanged() {
+    window.dispatchEvent(
+      new CustomEvent("eventgo:cart-updated")
+    );
+  }
+
+  async function changeQuantity(
+    item: CartItem,
+    nextQuantity: number
+  ) {
+    if (
+      updatingId ||
+      nextQuantity < 1 ||
+      nextQuantity > 10 ||
+      nextQuantity > item.available
+    ) {
+      return;
+    }
+
+    setUpdatingId(item.ticketTypeId);
+    setError(null);
+
+    try {
+      const updated = await updateCartQuantityAction(
+        item.ticketTypeId,
+        nextQuantity
+      );
+
+      setCart(updated);
+      notifyCartChanged();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update ticket quantity."
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function removeItem(ticketTypeId: string) {
+    if (updatingId) return;
+
+    setUpdatingId(ticketTypeId);
+    setError(null);
+
+    try {
+      const updated = await removeFromCartAction(
+        ticketTypeId
+      );
+
+      setCart(updated);
+      notifyCartChanged();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to remove ticket."
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  const items = cart?.items ?? [];
+
+  const ticketCount = items.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  const totals = items.reduce<Record<string, number>>(
+    (acc, item) => {
+      acc[item.currency] =
+        (acc[item.currency] ?? 0) +
+        Number(item.unitPrice) * item.quantity;
+
+      return acc;
+    },
+    {}
+  );
+
+  const canCheckout =
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        item.available >= item.quantity &&
+        item.quantity >= 1 &&
+        item.quantity <= 10 &&
+        new Date(item.eventDate).getTime() > Date.now()
+    );
+
+  if (loading) {
+    return (
+      <main className="flex min-h-[65vh] items-center justify-center">
+        <LoaderCircle
+          className="animate-spin text-[#FF6B53]"
+          size={36}
+        />
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-[75vh] bg-[#FAF9F7] px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <Link
+          href="/explore"
+          className="mb-7 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-[#FF6B53]"
+        >
+          <ArrowLeft size={17} />
+          Continue exploring
+        </Link>
+
+        <div className="mb-9 flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0EA] text-[#FF6B53]">
+            <ShoppingCart size={27} />
+          </div>
+
+          <div>
+            <h1 className="text-3xl font-bold text-[#08111D]">
+              Your Cart
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {ticketCount} tickets in your cart
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {error}
+            <button
+              type="button"
+              onClick={() => void loadCart()}
+              className="ml-3 font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {items.length === 0 ? (
+          <div className="rounded-3xl border border-slate-100 bg-white px-6 py-20 text-center shadow-sm">
+            <ShoppingCart
+              size={54}
+              className="mx-auto text-slate-300"
+            />
+
+            <h2 className="mt-5 text-xl font-bold text-[#08111D]">
+              Your cart is empty
+            </h2>
+
+            <p className="mt-2 text-slate-500">
+              Find an event and add your favorite tickets.
+            </p>
+
+            <Link
+              href="/explore"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#FF6B53] px-6 py-3 font-semibold text-white hover:bg-[#F05B44]"
+            >
+              Explore Events
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
+            <section className="space-y-4">
+              {items.map((item) => {
+                const busy = updatingId !== null;
+                const price = Number(item.unitPrice);
+
+                return (
+                  <article
+                    key={item.ticketTypeId}
+                    className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6"
+                  >
+                    <div className="flex flex-col justify-between gap-5 sm:flex-row">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-[#FFF0EA] px-3 py-1 text-xs font-semibold capitalize text-[#D85640]">
+                            {item.eventCategory}
+                          </span>
+
+                          {item.isDemo && (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                              Demo
+                            </span>
+                          )}
+                        </div>
+
+                        <h2 className="text-lg font-bold text-[#08111D]">
+                          {item.eventTitle}
+                        </h2>
+
+                        <p className="mt-2 text-sm text-slate-500">
+                          {item.city}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          {new Date(
+                            item.eventDate
+                          ).toLocaleString("de-DE", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </p>
+
+                        <p className="mt-3 text-sm font-medium text-slate-700">
+                          {item.ticketName}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatPrice(
+                            price,
+                            item.currency
+                          )}{" "}
+                          per ticket
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-start justify-between gap-4 sm:items-end">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void removeItem(item.ticketTypeId)
+                          }
+                          aria-label={`Remove ${item.eventTitle}`}
+                          className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-red-600 disabled:opacity-50"
+                        >
+                          <Trash2 size={17} />
+                          Remove
+                        </button>
+
+                        <div className="flex items-center rounded-xl border border-slate-200">
+                          <button
+                            type="button"
+                            aria-label="Decrease quantity"
+                            disabled={
+                              busy || item.quantity <= 1
+                            }
+                            onClick={() =>
+                              void changeQuantity(
+                                item,
+                                item.quantity - 1
+                              )
+                            }
+                            className="p-3 transition hover:bg-slate-100 disabled:opacity-30"
+                          >
+                            <Minus size={16} />
+                          </button>
+
+                          <span className="w-10 text-center text-sm font-bold tabular-nums">
+                            {updatingId ===
+                            item.ticketTypeId ? (
+                              <LoaderCircle
+                                size={16}
+                                className="mx-auto animate-spin"
+                              />
+                            ) : (
+                              item.quantity
+                            )}
+                          </span>
+
+                          <button
+                            type="button"
+                            aria-label="Increase quantity"
+                            disabled={
+                              busy ||
+                              item.quantity >= 10 ||
+                              item.quantity >= item.available
+                            }
+                            onClick={() =>
+                              void changeQuantity(
+                                item,
+                                item.quantity + 1
+                              )
+                            }
+                            className="p-3 transition hover:bg-slate-100 disabled:opacity-30"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+
+                        <p className="text-xl font-bold text-[#08111D]">
+                          {formatPrice(
+                            price * item.quantity,
+                            item.currency
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {item.quantity > item.available && (
+                      <p className="mt-4 text-sm font-medium text-red-600">
+                        Only {item.available} tickets remain.
+                        Reduce the quantity before checkout.
+                      </p>
+                    )}
+
+                    {new Date(item.eventDate).getTime() <=
+                      Date.now() && (
+                      <p className="mt-4 text-sm font-medium text-red-600">
+                        This event has already started.
+                        Remove it before checkout.
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </section>
+
+            <aside className="h-fit rounded-2xl border border-slate-100 bg-white p-6 shadow-sm lg:sticky lg:top-24">
+              <h2 className="text-xl font-bold text-[#08111D]">
+                Order Summary
+              </h2>
+
+              <div className="mt-6 flex justify-between text-sm text-slate-600">
+                <span>Tickets</span>
+                <span className="font-semibold">
+                  {ticketCount}
+                </span>
+              </div>
+
+              <div className="my-5 border-t border-slate-100" />
+
+              {Object.entries(totals).map(
+                ([currency, amount]) => (
+                  <div
+                    key={currency}
+                    className="mb-4 flex justify-between gap-3"
+                  >
+                    <span className="font-semibold text-[#08111D]">
+                      Subtotal
+                    </span>
+                    <span className="text-xl font-bold text-[#08111D]">
+                      {formatPrice(amount, currency)}
+                    </span>
+                  </div>
+                )
+              )}
+
+              <Link
+                href={canCheckout ? "/checkout" : "/cart"}
+                aria-disabled={!canCheckout || updatingId !== null}
+                onClick={(event) => {
+                  if (!canCheckout || updatingId !== null) {
+                    event.preventDefault();
+                  }
+                }}
+                className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-4 font-bold text-white transition ${
+                  canCheckout && updatingId === null
+                    ? "bg-[#FF6B53] hover:bg-[#F05B44]"
+                    : "cursor-not-allowed bg-slate-300"
+                }`}
+              >
+                Proceed to Checkout
+                <ArrowRight size={18} />
+              </Link>
+
+              <p className="mt-4 text-center text-xs leading-5 text-slate-500">
+                Tickets and prices will be verified again
+                before payment.
+              </p>
+            </aside>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\checkout\success\page.tsx =====
+
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
+
+import { getSession } from "@/lib/auth";
+
+import {
+  getDemoOrderForUser,
+} from "@eventgo/backend/services/order.service";
+
+interface SuccessPageProps {
+  searchParams: Promise<{
+    orderId?: string | string[];
+  }>;
+}
+
+export default async function CheckoutSuccessPage({
+  searchParams,
+}: SuccessPageProps) {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/auth/login");
+  }
+
+  const { orderId } = await searchParams;
+
+  if (typeof orderId !== "string") {
+    notFound();
+  }
+
+  const order = await getDemoOrderForUser(
+    session.userId,
+    orderId
+  );
+
+  if (!order) {
+    notFound();
+  }
+
+  const total = new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: order.currency,
+  }).format(Number(order.totalAmount));
+
+  return (
+    <main className="flex min-h-[75vh] items-center justify-center bg-[#FAF9F7] px-4 py-16">
+      <div className="w-full max-w-xl rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm sm:p-12">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
+          <CheckCircle2
+            size={46}
+            className="text-emerald-600"
+          />
+        </div>
+
+        <h1 className="mt-7 text-3xl font-bold text-[#08111D]">
+          Demo Order Confirmed!
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Your demo order was created successfully.
+          No real payment was collected.
+        </p>
+
+        <div className="mt-8 rounded-2xl bg-[#FAF9F7] p-5 text-left">
+          <p className="text-xs font-medium text-slate-500">
+            Order ID
+          </p>
+
+          <p className="mt-1 break-all text-sm font-semibold">
+            {order.id}
+          </p>
+
+          <div className="mt-5 flex justify-between">
+            <span className="text-sm text-slate-600">
+              Tickets issued
+            </span>
+            <span className="font-bold">
+              {order.ticketCount}
+            </span>
+          </div>
+
+          <div className="mt-3 flex justify-between">
+            <span className="text-sm text-slate-600">
+              Demo total
+            </span>
+            <span className="font-bold">
+              {total}
+            </span>
+          </div>
+        </div>
+
+        <Link
+          href="/explore"
+          className="mt-8 inline-flex rounded-xl bg-[#FF6B53] px-7 py-3 font-bold text-white hover:bg-[#F05B44]"
+        >
+          Explore More Events
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\checkout\page.tsx =====
+
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { DemoCheckoutButton } from "@/components/molecules/DemoCheckoutButton/DemoCheckoutButton";
+import {
+  ArrowLeft,
+  CreditCard,
+  LockKeyhole,
+  Ticket,
+} from "lucide-react";
+
+import { getSession } from "@/lib/auth";
+import { getCart } from "@eventgo/backend/services/cart.service";
+export const instant = false;
+function formatPrice(amount: number, currency: string) {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
+
+export default async function CheckoutPage() {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/auth/login");
+  }
+
+  const cart = await getCart(session.userId);
+  const items = cart.items;
+
+  if (items.length === 0) {
+    redirect("/cart");
+  }
+
+  const totals = items.reduce<Record<string, number>>(
+    (acc, item) => {
+      acc[item.currency] =
+        (acc[item.currency] ?? 0) +
+        Number(item.unitPrice) * item.quantity;
+
+      return acc;
+    },
+    {}
+  );
+
+  const ticketCount = items.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  const hasUnavailableItems = items.some(
+    (item) =>
+      item.quantity > item.available ||
+      new Date(item.eventDate).getTime() <= Date.now()
+  );
+
+  if (hasUnavailableItems) {
+    redirect("/cart");
+  }
+
+  return (
+    <main className="min-h-[75vh] bg-[#FAF9F7] px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-4xl">
+        <Link
+          href="/cart"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-[#FF6B53]"
+        >
+          <ArrowLeft size={17} />
+          Back to Cart
+        </Link>
+
+        <div className="mt-8 flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0EA] text-[#FF6B53]">
+            <CreditCard size={27} />
+          </div>
+
+          <div>
+            <h1 className="text-3xl font-bold text-[#08111D]">
+              Checkout
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Review your tickets before payment
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-9 grid gap-7 md:grid-cols-[1fr_300px]">
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center gap-3">
+                <Ticket
+                  size={22}
+                  className="text-[#FF6B53]"
+                />
+                <h2 className="text-xl font-bold text-[#08111D]">
+                  Your Tickets
+                </h2>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {items.map((item) => (
+                  <div
+                    key={item.ticketTypeId}
+                    className="flex justify-between gap-4 py-5"
+                  >
+                    <div>
+                      <p className="font-semibold text-[#08111D]">
+                        {item.eventTitle}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        {item.ticketName} × {item.quantity}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.city}
+                      </p>
+
+                      {item.isDemo && (
+                        <span className="mt-2 inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                          Demo ticket
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="whitespace-nowrap font-bold text-[#08111D]">
+                      {formatPrice(
+                        Number(item.unitPrice) *
+                          item.quantity,
+                        item.currency
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            
+          </section>
+
+          <aside className="h-fit rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-[#08111D]">
+              Payment Summary
+            </h2>
+
+            <div className="mt-6 flex justify-between text-sm text-slate-600">
+              <span>Tickets</span>
+              <span>{ticketCount}</span>
+            </div>
+
+            <div className="my-5 border-t border-slate-100" />
+
+            {Object.entries(totals).map(
+              ([currency, amount]) => (
+                <div
+                  key={currency}
+                  className="mb-4 flex items-center justify-between gap-3"
+                >
+                  <span className="font-semibold">
+                    Total
+                  </span>
+
+                  <span className="text-xl font-bold">
+                    {formatPrice(amount, currency)}
+                  </span>
+                </div>
+              )
+            )}
+
+          <DemoCheckoutButton />
+
+            <Link
+              href="/cart"
+              className="mt-4 block text-center text-sm font-semibold text-[#FF6B53] hover:underline"
+            >
+              Edit Cart
+            </Link>
+          </aside>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\explore\page.tsx =====
+
+import { searchEventsAction } from "@/app/actions/event.actions";
+import { ExplorePage } from "@/components/ExplorePage/ExplorePage";
+
+import type {
+  EventCategory,
+  EventFilters,
+} from "@/types/event";
+
+interface PageProps {
+  searchParams: Promise<{
+    city?: string;
+    radius?: string;
+    date?: string;
+    category?: string;
+    q?: string;
+    page?: string;
+  }>;
+}
+
+const categories: EventCategory[] = [
+  "music",
+  "sports",
+  "technology",
+  "food",
+  "art",
+  "business",
+  "nightlife",
+  "festivals",
+  "cinema",
+  "comedy",
+  "culture",
+  "wellness",
+];
+
+function buildPageUrl(
+  params: Record<string, string | undefined>,
+  page: number
+) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      query.set(key, value);
+    }
+  }
+
+  query.set("page", String(page));
+
+  return `/explore?${query.toString()}`;
+}
+
+export default async function Page({
+  searchParams,
+}: PageProps) {
+  const params = await searchParams;
+
+  const parsedRadius = Number(params.radius || 25);
+  const parsedPage = Number(params.page || 1);
+
+  const filters: EventFilters = {
+    city: params.city ?? "",
+    radius:
+      Number.isFinite(parsedRadius) && parsedRadius > 0
+        ? parsedRadius
+        : 25,
+    date: params.date ?? "",
+    category:
+      params.category &&
+      categories.includes(
+        params.category as EventCategory
+      )
+        ? (params.category as EventCategory)
+        : "all",
+  };
+
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0
+      ? parsedPage
+      : 1;
+
+  const result = await searchEventsAction({
+    ...filters,
+    q: params.q ?? "",
+    page,
+    pageSize: 20,
+  });
+
+  const urlParams = {
+    city: filters.city,
+    radius: String(filters.radius),
+    date: filters.date,
+    category: filters.category,
+    q: params.q,
+  };
+
+  return (
+    <ExplorePage
+      filters={filters}
+      events={result.events}
+      page={result.page}
+      hasMore={result.hasMore}
+      previousUrl={
+        result.page > 1
+          ? buildPageUrl(urlParams, result.page - 1)
+          : undefined
+      }
+      nextUrl={
+        result.hasMore
+          ? buildPageUrl(urlParams, result.page + 1)
+          : undefined
+      }
+    />
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\my-events\page.tsx =====
+
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import {
+  CalendarDays,
+  ChevronRight,
+  LoaderCircle,
+  MapPin,
+  QrCode,
+  Ticket,
+  Users,
+} from "lucide-react";
+
+import { getMyTicketsAction } from
+  "@/app/actions/my-tickets.actions";
+
+import { MyTicketDialog } from
+  "@/components/molecules/MyTicketDialog/MyTicketDialog";
+
+import type { MyTicket } from
+  "@eventgo/backend/services/my-ticket.service";
+
+export default function MyEventsPage() {
+  const [tickets, setTickets] = useState<MyTicket[]>(
+    []
+  );
+  const [selected, setSelected] =
+    useState<MyTicket | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadTickets() {
+      try {
+        const data = await getMyTicketsAction();
+
+        if (active) {
+          setTickets(data);
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load tickets."
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadTickets();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function openTicket(ticket: MyTicket) {
+    setSelected(ticket);
+    setOpen(true);
+  }
+
+  return (
+    <main className="min-h-[75vh] bg-[#FAF9F7] px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-9 flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0EA] text-[#FF6B53]">
+            <Ticket size={28} />
+          </div>
+
+          <div>
+            <h1 className="text-3xl font-bold text-[#08111D]">
+              My Events
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Your purchased event tickets
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-[300px] items-center justify-center">
+            <LoaderCircle
+              size={34}
+              className="animate-spin text-[#FF6B53]"
+            />
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700"
+          >
+            {error}
+          </div>
+        ) : tickets.length === 0 ? (
+          <div className="rounded-3xl border border-slate-100 bg-white px-6 py-20 text-center shadow-sm">
+            <Ticket
+              size={52}
+              className="mx-auto text-slate-300"
+            />
+
+            <h2 className="mt-5 text-xl font-bold text-[#08111D]">
+              No tickets yet
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Your group tickets appear here
+              after checkout.
+            </p>
+
+            <Link
+              href="/explore"
+              className="mt-7 inline-flex rounded-xl bg-[#FF6B53] px-6 py-3 font-bold text-white hover:bg-[#F05B44]"
+            >
+              Explore Events
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {tickets.map((ticket) => (
+              <button
+                key={ticket.id}
+                type="button"
+                onClick={() => openTicket(ticket)}
+                className="group overflow-hidden rounded-3xl border border-slate-100 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              >
+                <div className="bg-[#08111D] p-6 text-white">
+                  <div className="mb-5 flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#FF9F8C]">
+                      <Ticket size={17} />
+                      EventGo
+                    </span>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        ticket.status === "ACTIVE"
+                          ? "bg-emerald-500/20 text-emerald-300"
+                          : "bg-slate-500/20 text-slate-300"
+                      }`}
+                    >
+                      {ticket.status === "ACTIVE"
+                        ? "Active"
+                        : ticket.status === "USED"
+                          ? "Used"
+                          : "Cancelled"}
+                    </span>
+                  </div>
+
+                  <h2 className="line-clamp-2 min-h-[56px] text-xl font-bold">
+                    {ticket.eventTitle}
+                  </h2>
+
+                  <p className="mt-3 text-sm text-slate-300">
+                    {ticket.ticketType}
+                  </p>
+
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2">
+                    <Users size={18} />
+                    <span className="font-bold">
+                      {ticket.quantity}{" "}
+                      {ticket.quantity === 1
+                        ? "Person"
+                        : "Persons"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-6">
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <CalendarDays
+                      size={18}
+                      className="text-[#FF6B53]"
+                    />
+                    {new Date(
+                      ticket.startsAt
+                    ).toLocaleString("de-DE", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <MapPin
+                      size={18}
+                      className="text-[#FF6B53]"
+                    />
+                    {ticket.city}
+                  </div>
+
+                  <div className="border-t border-dashed border-slate-200 pt-4">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-2 font-bold text-[#FF6B53]">
+                        <QrCode size={20} />
+                        View Group Ticket
+                      </span>
+
+                      <ChevronRight
+                        size={20}
+                        className="text-slate-400 transition group-hover:translate-x-1"
+                      />
+                    </div>
+                  </div>
+
+                  {ticket.isDemo && (
+                    <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                      Demo Ticket
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <MyTicketDialog
+          ticket={selected}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\app\page.tsx =====
+
+import { HomePage } from "@/components/HomePage/HomePage";
+
+export default function Page() {
+  return <HomePage />;
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\atoms\NavbarFireworks\NavbarFireworks.tsx =====
+
+const fireworks = [
+  { x: "12%", y: "45%", delay: "0s", color: "#FF6B53" },
+  { x: "30%", y: "55%", delay: "1.4s", color: "#20B6A4" },
+  { x: "52%", y: "35%", delay: "2.8s", color: "#FFB65C" },
+  { x: "75%", y: "60%", delay: "1.8s", color: "#FF6B53" },
+  { x: "90%", y: "40%", delay: "3.5s", color: "#20B6A4" },
+];
+
+export function NavbarFireworks() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      {fireworks.map((firework, index) => (
+        <span
+          key={index}
+          className="eventgo-firework"
+          style={{
+            left: firework.x,
+            top: firework.y,
+            color: firework.color,
+            animationDelay: firework.delay,
+          }}
+        >
+          {Array.from({ length: 10 }, (_, ray) => (
+            <span
+              key={ray}
+              className="eventgo-firework-ray"
+              style={{
+                transform: `rotate(${ray * 36}deg)`,
+              }}
+            />
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\molecules\DemoCheckoutButton\DemoCheckoutButton.tsx =====
+
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CreditCard,
+  Wallet,
+  Landmark,
+  LoaderCircle,
+  LockKeyhole,
+} from "lucide-react";
+
+import {
+  confirmDemoOrderAction,
+} from "@/app/actions/checkout.actions";
+
+type PaymentMethod = "card" | "paypal" | "bank";
+
+const paymentMethods = [
+  {
+    id: "card",
+    label: "Credit / Debit Card",
+    Icon: CreditCard,
+  },
+  {
+    id: "paypal",
+    label: "PayPal",
+    Icon: Wallet,
+  },
+  {
+    id: "bank",
+    label: "Bank Transfer",
+    Icon: Landmark,
+  },
+] as const;
+
+export function DemoCheckoutButton() {
+  const router = useRouter();
+
+  const [method, setMethod] =
+    useState<PaymentMethod>("card");
+
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  async function handleConfirm() {
+    if (loading) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const order = await confirmDemoOrderAction();
+
+      window.dispatchEvent(
+        new CustomEvent("eventgo:cart-updated")
+      );
+
+      router.push(
+        `/checkout/success?orderId=${encodeURIComponent(
+          order.orderId
+        )}`
+      );
+
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to complete demo checkout."
+      );
+
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-5">
+      <div>
+        <h3 className="mb-4 text-lg font-bold text-[#08111D]">
+          Payment Method
+        </h3>
+
+        <div className="space-y-3">
+          {paymentMethods.map(
+            ({ id, label, Icon }) => {
+              const selected = method === id;
+
+              return (
+                <label
+                  key={id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${
+                    selected
+                      ? "border-[#FF6B53] bg-[#FFF5F1]"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value={id}
+                    checked={selected}
+                    onChange={() => setMethod(id)}
+                    disabled={loading}
+                    className="accent-[#FF6B53]"
+                  />
+
+                  <Icon
+                    size={22}
+                    className="text-slate-700"
+                  />
+
+                  <span className="flex-1 text-sm font-semibold text-[#08111D]">
+                    {label}
+                  </span>
+
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                    Demo
+                  </span>
+                </label>
+              );
+            }
+          )}
+        </div>
+      </div>
+
+     
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={handleConfirm}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B53] px-5 py-4 font-bold text-white transition hover:bg-[#F05B44] disabled:cursor-wait disabled:opacity-60"
+      >
+        {loading && (
+          <LoaderCircle
+            size={19}
+            className="animate-spin"
+          />
+        )}
+
+        {loading
+          ? "Processing Demo Order..."
+          : "Confirm Demo Order"}
+      </button>
+
+      {error && (
+        <p
+          role="alert"
+          className="text-sm text-red-600"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\molecules\MyTicketDialog\MyTicketDialog.tsx =====
+
+"use client";
+
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
+
+import {
+  CalendarDays,
+  LoaderCircle,
+  MapPin,
+  QrCode,
+  Users,
+} from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import { getMyTicketQrAction } from
+  "@/app/actions/my-tickets.actions";
+
+import type { MyTicket } from
+  "@eventgo/backend/services/my-ticket.service";
+
+interface Props {
+  ticket: MyTicket | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function MyTicketDialog({
+  ticket,
+  open,
+  onOpenChange,
+}: Props) {
+  const [image, setImage] = useState<string | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    null
+  );
+
+  const groupId = ticket?.id;
+  const isActive = ticket?.status === "ACTIVE";
+
+  useEffect(() => {
+    if (!open || !groupId || !isActive) {
+      setImage(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadQr() {
+      setLoading(true);
+      setImage(null);
+      setError(null);
+
+      try {
+        const token = await getMyTicketQrAction(
+          groupId!
+        );
+
+        const result = await QRCode.toDataURL(
+          token,
+          {
+            width: 320,
+            margin: 2,
+            errorCorrectionLevel: "H",
+          }
+        );
+
+        if (!cancelled) {
+          setImage(result);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load QR code"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadQr();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, open, isActive]);
+
+  if (!ticket) {
+    return null;
+  }
+
+  const eventDate = new Date(
+    ticket.startsAt
+  ).toLocaleString("de-DE", {
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle className="text-center text-2xl font-bold">
+            Group Ticket
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            All group members enter together.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className="bg-[#08111D] p-6 text-white">
+            <div className="mb-4 flex items-center gap-2 text-[#FF9F8C]">
+              <QrCode size={20} />
+              <span className="text-xs font-bold uppercase tracking-widest">
+                EventGo
+              </span>
+            </div>
+
+            <h2 className="text-xl font-bold">
+              {ticket.eventTitle}
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-300">
+              {ticket.ticketType}
+            </p>
+
+            <div className="mt-5 flex items-center gap-3 rounded-xl bg-white/10 p-4">
+              <Users
+                size={23}
+                className="text-[#FF9F8C]"
+              />
+
+              <span className="text-xl font-bold">
+                {ticket.quantity}{" "}
+                {ticket.quantity === 1
+                  ? "Person"
+                  : "Persons"}
+              </span>
+            </div>
+
+            <div className="mt-6 space-y-3 text-sm">
+              <div className="flex items-center gap-3">
+                <CalendarDays
+                  size={17}
+                  className="text-[#FF9F8C]"
+                />
+                {eventDate}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <MapPin
+                  size={17}
+                  className="text-[#FF9F8C]"
+                />
+                {ticket.city}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center bg-white p-7">
+            {ticket.status !== "ACTIVE" ? (
+              <div className="py-12 text-center">
+                <p className="font-bold text-slate-800">
+                  {ticket.status === "USED"
+                    ? "Ticket Already Used"
+                    : "Ticket Cancelled"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  This QR code is no longer available.
+                </p>
+              </div>
+            ) : (
+              <>
+                {loading && (
+                  <div className="flex h-[280px] items-center justify-center">
+                    <LoaderCircle
+                      className="animate-spin text-[#FF6B53]"
+                      size={34}
+                    />
+                  </div>
+                )}
+
+                {!loading && image && (
+                  <img
+                    src={image}
+                    alt="Group ticket QR code"
+                    width={280}
+                    height={280}
+                    className="h-[280px] w-[280px]"
+                  />
+                )}
+
+                {error && (
+                  <p
+                    role="alert"
+                    className="py-10 text-center text-sm text-red-600"
+                  >
+                    {error}
+                  </p>
+                )}
+
+                {image && (
+                  <p className="mt-3 text-center text-sm font-semibold text-slate-700">
+                    Valid for {ticket.quantity}{" "}
+                    {ticket.quantity === 1
+                      ? "person"
+                      : "persons"}{" "}
+                    entering together
+                  </p>
+                )}
+              </>
+            )}
+
+            <p className="mt-5 text-xs text-slate-400">
+              Group ID
+            </p>
+            <p className="mt-1 break-all text-center font-mono text-xs text-slate-500">
+              {ticket.id}
+            </p>
+
+            {ticket.isDemo && (
+              <span className="mt-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                Demo Ticket
+              </span>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\molecules\SearchField\SearchField.tsx =====
+
+"use client";
+
+import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface SearchFieldProps {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  onClick?: () => void;
+  placeholder?: string;
+  showChevron?: boolean;
+  className?: string;
+}
+
+export function SearchField({
+  label,
+  value,
+  icon,
+  onClick,
+  placeholder = "Select option",
+  showChevron = true,
+  className,
+}: SearchFieldProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group flex min-h-[64px] w-full items-center",
+        "gap-3 rounded-xl px-4 py-3 text-left",
+        "transition-colors hover:bg-[#F8F6F3]",
+        "focus-visible:outline-2 focus-visible:outline-[#FF6B53]",
+        className
+      )}
+    >
+      <span className="shrink-0 text-[#FF6B53]">
+        {icon}
+      </span>
+
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          {label}
+        </span>
+
+        <span className="truncate text-sm font-semibold text-[#101828]">
+          {value || placeholder}
+        </span>
+      </span>
+
+      {showChevron && (
+        <ChevronDown
+          size={16}
+          className="shrink-0 text-slate-500 transition-transform group-hover:translate-y-0.5"
+        />
+      )}
+    </button>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\molecules\SearchFilters\SearchFilters.tsx =====
+
+"use client";
+
+import {
+  MapPin,
+  Radar,
+  CalendarDays,
+  Tags,
+} from "lucide-react";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { cn } from "@/lib/utils";
+import { categories } from "@/data/categories";
+
+import type {
+  EventCategory,
+  EventFilters,
+} from "@/types/event";
+
+interface SearchFiltersProps {
+  filters: EventFilters;
+  onChange: <K extends keyof EventFilters>(
+    key: K,
+    value: EventFilters[K]
+  ) => void;
+  className?: string;
+}
+
+const cities = [
+  "Dortmund",
+  "Berlin",
+  "Hamburg",
+  "Munich",
+  "Cologne",
+  "Düsseldorf",
+  "Frankfurt",
+  "Stuttgart",
+  "Leipzig",
+  "Münster",
+];
+
+const eventCategories: {
+  label: string;
+  value: EventCategory | "all";
+}[] = [
+  {
+    label: "All categories",
+    value: "all",
+  },
+  ...categories.map((category) => ({
+    label: category.label,
+    value: category.id,
+  })),
+];
+
+const dates = [
+  { label: "Any date", value: "all" },
+  { label: "Today", value: "today" },
+  { label: "Tomorrow", value: "tomorrow" },
+  { label: "This weekend", value: "weekend" },
+];
+
+function FilterCell({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-4 py-2">
+      <span className="shrink-0 text-[#FF6B53]">
+        {icon}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          {label}
+        </span>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function SearchFilters({
+  filters,
+  onChange,
+  className,
+}: SearchFiltersProps) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-1 divide-y divide-[#EAE7E3]",
+        "md:grid-cols-2 md:divide-y-0",
+        "xl:grid-cols-4",
+        className
+      )}
+    >
+      <FilterCell
+        label="Location"
+        icon={<MapPin size={20} />}
+      >
+        <Select
+          value={filters.city}
+          onValueChange={(value) => {
+            if (value) {
+              onChange("city", value);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full border-0 bg-transparent px-0 text-[#08111D] shadow-none [&_[data-slot=select-value]]:text-[#08111D] [&_svg]:text-[#64748B]">
+  <SelectValue placeholder="Choose city" />
+</SelectTrigger>
+
+          <SelectContent>
+            {cities.map((city) => (
+              <SelectItem
+                key={city}
+                value={city}
+              >
+                {city}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterCell>
+
+      <FilterCell
+        label="Radius"
+        icon={<Radar size={20} />}
+      >
+        <Select
+          value={String(filters.radius)}
+          onValueChange={(value) => {
+            if (value) {
+              onChange(
+                "radius",
+                Number(value)
+              );
+            }
+          }}
+        >
+          <SelectTrigger className="w-full border-0 bg-transparent px-0 shadow-none">
+            <SelectValue />
+          </SelectTrigger>
+
+          <SelectContent>
+            {[5, 10, 25, 50, 100, 200, 500].map(
+              (radius) => (
+                <SelectItem
+                  key={radius}
+                  value={String(radius)}
+                >
+                  {radius} km
+                </SelectItem>
+              )
+            )}
+          </SelectContent>
+        </Select>
+      </FilterCell>
+
+      <FilterCell
+        label="Date"
+        icon={<CalendarDays size={20} />}
+      >
+        <Select
+          value={filters.date || "all"}
+          onValueChange={(value) => {
+            if (value) {
+              onChange("date", value);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full border-0 bg-transparent px-0 shadow-none">
+            <SelectValue placeholder="Any date" />
+          </SelectTrigger>
+
+          <SelectContent>
+            {dates.map((date) => (
+              <SelectItem
+                key={date.value}
+                value={date.value}
+              >
+                {date.label}
+              </SelectItem>
+            ))}
+
+            {filters.date &&
+              /^\d{4}-\d{2}-\d{2}$/.test(
+                filters.date
+              ) && (
+                <SelectItem value={filters.date}>
+                  {filters.date}
+                </SelectItem>
+              )}
+          </SelectContent>
+        </Select>
+      </FilterCell>
+
+      <FilterCell
+        label="Category"
+        icon={<Tags size={20} />}
+      >
+        <Select
+          value={filters.category || "all"}
+          onValueChange={(value) => {
+            if (value) {
+              onChange(
+                "category",
+                value as EventCategory | "all"
+              );
+            }
+          }}
+        >
+          <SelectTrigger className="w-full border-0 bg-transparent px-0 shadow-none">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+
+          <SelectContent>
+            {eventCategories.map((category) => (
+              <SelectItem
+                key={category.value}
+                value={category.value}
+              >
+                {category.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterCell>
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\molecules\SearchResultCard\SearchResultCard.tsx =====
+
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+
+import {
+  CalendarDays,
+  Clock3,
+  MapPin,
+  Navigation,
+  Ticket,
+  ArrowRight,
+} from "lucide-react";
+
+import { CategoryIcon } from "@/components/atoms/CategoryIcon/CategoryIcon";
+import { EventDetailsDialog } from "@/components/molecules/EventDetailsDialog/EventDetailsDialog";
+
+import type { Event } from "@/types/event";
+
+interface SearchResultCardProps {
+  event: Event;
+}
+
+function formatEventDate(value: string) {
+  const date = new Date(`${value}T12:00:00Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+export function SearchResultCard({
+  event,
+}: SearchResultCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const categoryLabel =
+    event.category.charAt(0).toUpperCase() +
+    event.category.slice(1);
+
+  return (
+    <>
+      <article className="overflow-hidden rounded-[20px] border border-[#EAE7E3] bg-white shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex flex-col sm:min-h-[208px] sm:flex-row">
+          <div className="relative h-48 shrink-0 overflow-hidden bg-slate-100 sm:h-auto sm:w-[38%]">
+            <Image
+              src={event.image}
+              alt={event.title}
+              fill
+              sizes="(max-width: 640px) 100vw, 300px"
+              className="object-cover"
+            />
+
+            <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#08111D] shadow-sm">
+                <CategoryIcon
+                  category={event.category}
+                  size={13}
+                />
+                {categoryLabel}
+              </span>
+
+              {event.isDemo && (
+                <span className="rounded-full bg-[#FFF0CC] px-2.5 py-1 text-[11px] font-semibold text-[#8A5600]">
+                  Demo
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col p-5">
+            <h3 className="text-base font-bold leading-snug text-[#08111D]">
+              {event.title}
+            </h3>
+
+            {event.description && (
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                {event.description}
+              </p>
+            )}
+
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <CalendarDays
+                  size={15}
+                  className="shrink-0 text-slate-400"
+                />
+                <span>{formatEventDate(event.date)}</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <Clock3
+                  size={15}
+                  className="shrink-0 text-slate-400"
+                />
+                <span>{event.time}</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <MapPin
+                  size={15}
+                  className="shrink-0 text-slate-400"
+                />
+                <span className="truncate">
+                  {event.venue
+                    ? `${event.venue}, ${event.city}`
+                    : event.city}
+                </span>
+              </div>
+
+              {event.distanceKm != null && (
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <Navigation
+                    size={15}
+                    className="shrink-0 text-slate-400"
+                  />
+                  <span>
+                    {event.distanceKm.toFixed(1)} km away
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-auto pt-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <div>
+                  {event.price != null ? (
+                    <p className="text-base font-bold text-[#08111D]">
+                      {new Intl.NumberFormat("de-DE", {
+                        style: "currency",
+                        currency: event.currency ?? "EUR",
+                      }).format(event.price)}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-semibold text-slate-500">
+                      See ticket prices
+                    </p>
+                  )}
+                </div>
+
+                {event.isDemo && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
+                    <Ticket size={13} />
+                    Demo event
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B53] px-4 text-sm font-bold text-white transition hover:bg-[#F05B44]"
+              >
+                View Tickets
+                <ArrowRight size={17} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      {detailsOpen && (
+        <EventDetailsDialog
+          event={event}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+        />
+      )}
+    </>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\organisms\EventSearchBar\EventSearchBar.tsx =====
+
+"use client";
+
+import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SearchFilters } from "@/components/molecules/SearchFilters/SearchFilters";
+import type { EventFilters } from "@/types/event";
+
+interface EventSearchBarProps {
+  filters: EventFilters;
+  onChange: <K extends keyof EventFilters>(
+    key: K,
+    value: EventFilters[K]
+  ) => void;
+  onSearch: () => void;
+}
+
+export function EventSearchBar({
+  filters,
+  onChange,
+  onSearch,
+}: EventSearchBarProps) {
+  return (
+    <div className="w-full rounded-[28px] bg-white p-2 shadow-[0_18px_55px_rgba(0,0,0,0.18)]">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="min-w-0 flex-1">
+          <SearchFilters
+            filters={filters}
+            onChange={onChange}
+            className="lg:grid-cols-[1.35fr_0.75fr_1fr_1fr] lg:items-center [&>div:not(:first-child)]:lg:border-l [&>div:not(:first-child)]:lg:border-[#EAE7E3]"
+          />
+        </div>
+
+        <Button
+          type="button"
+          onClick={onSearch}
+          className="flex h-[64px] w-full shrink-0 items-center justify-center gap-2 rounded-[21px] bg-[#FF6B53] px-7 text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(255,107,83,0.22)] transition hover:bg-[#F05B44] lg:w-[140px]"
+        >
+          <Search size={19} />
+          Search
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\organisms\ExploreSearch\ExploreSearch.tsx =====
+
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { EventSearchBar } from "@/components/organisms/EventSearchBar/EventSearchBar";
+
+import type { EventFilters } from "@/types/event";
+
+interface ExploreSearchProps {
+  initialFilters: EventFilters;
+}
+
+export function ExploreSearch({
+  initialFilters,
+}: ExploreSearchProps) {
+  const router = useRouter();
+
+  const [filters, setFilters] =
+    useState<EventFilters>(initialFilters);
+
+  function handleChange<K extends keyof EventFilters>(
+    key: K,
+    value: EventFilters[K]
+  ) {
+    setFilters((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
+  }
+
+  function handleSearch() {
+    const params = new URLSearchParams({
+      city: filters.city,
+      radius: String(filters.radius),
+      date: filters.date,
+      category: filters.category,
+    });
+
+    router.push(`/explore?${params.toString()}`);
+  }
+
+  return (
+    <EventSearchBar
+      filters={filters}
+      onChange={handleChange}
+      onSearch={handleSearch}
+    />
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\organisms\FloatingCart\FloatingCart.tsx =====
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
+
+import {
+  getCartAction,
+} from "@/app/actions/cart.actions";
+
+export function FloatingCart() {
+  const [count, setCount] = useState(0);
+
+  const refreshCart = useCallback(async () => {
+    try {
+      const result = await getCartAction();
+
+      const total =
+        result.cart?.items.reduce(
+          (sum, item) => sum + item.quantity,
+          0
+        ) ?? 0;
+
+      setCount(total);
+    } catch (error) {
+      console.error("Unable to load cart:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCart();
+
+    window.addEventListener(
+      "eventgo:cart-updated",
+      refreshCart
+    );
+
+    return () => {
+      window.removeEventListener(
+        "eventgo:cart-updated",
+        refreshCart
+      );
+    };
+  }, [refreshCart]);
+
+  return (
+    <Link
+      href="/cart"
+      aria-label={`Open cart with ${count} tickets`}
+      className="fixed bottom-6 right-6 z-[900] flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#FF6B53] text-white shadow-[0_0_24px_rgba(255,107,83,0.65)] transition-all duration-300 hover:scale-110 hover:shadow-[0_0_38px_rgba(255,107,83,0.85)]"
+    >
+      <ShoppingCart size={28} strokeWidth={2.2} />
+
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-7 min-w-7 items-center justify-center rounded-full border-[3px] border-white bg-[#08111D] px-1 text-xs font-bold text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\event-app\src\components\organisms\Navbar\Navbar.tsx =====
+
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+
+import {
+  Menu,
+  X,
+  Heart,
+  Bell,
+  LogOut,
+  LayoutDashboard,
+} from "lucide-react";
+
+import { Brand } from "@/components/atoms/Brand/Brand";
+import { IconButton } from "@/components/atoms/IconButton/IconButton";
+import { NavbarFireworks } from "@/components/atoms/NavbarFireworks/NavbarFireworks";
+import { NavItem } from "@/components/molecules/NavItem/NavItem";
+
+type NavbarProps = {
+  role: "user" | "admin";
+};
+
+const navigation = [
+  { label: "Home", href: "/" },
+  { label: "Explore", href: "/explore" },
+  { label: "My Events", href: "/my-events" },
+];
+
+const ADMIN_URL = "http://localhost:3001";
+
+export function Navbar({ role }: NavbarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+
+  const isAdmin = role === "admin";
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      const response = await fetch(
+        "/auth/api/auth/logout",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+
+      setMenuOpen(false);
+      window.location.replace("/auth/login");
+    } catch {
+      setLogoutError(
+        "Could not log out. Please try again."
+      );
+      setLoggingOut(false);
+    }
+  }
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-[#EAE7E3] bg-white/95 backdrop-blur-xl">
+      <NavbarFireworks />
+
+      <div className="relative z-10 mx-auto flex h-[76px] max-w-[1280px] items-center justify-between px-5 lg:px-10">
+        <Brand />
+
+        <nav
+          aria-label="Main navigation"
+          className="hidden items-center gap-1 rounded-full bg-[#F4F2EF] p-1 md:flex"
+        >
+          {navigation.map((item) => (
+            <NavItem
+              key={item.href}
+              label={item.label}
+              href={item.href}
+            />
+          ))}
+        </nav>
+
+        <div className="hidden items-center gap-3 md:flex">
+          <Link
+            href="/favorites"
+            aria-label="Favorites"
+            className="rounded-full p-2 text-[#344054] transition hover:bg-orange-50 hover:text-orange-500"
+          >
+            <Heart size={20} />
+          </Link>
+
+          <Link
+            href="/notifications"
+            aria-label="Notifications"
+            className="rounded-full p-2 text-[#344054] transition hover:bg-orange-50 hover:text-orange-500"
+          >
+            <Bell size={20} />
+          </Link>
+
+          {isAdmin && (
+            <a
+              href={ADMIN_URL}
+              className="flex items-center gap-2 rounded-full border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 transition hover:bg-orange-50"
+            >
+              <LayoutDashboard size={17} />
+              Admin
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex items-center gap-2 rounded-full bg-[#101828] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut size={17} />
+            {loggingOut ? "Logging out..." : "Logout"}
+          </button>
+        </div>
+
+        <div className="md:hidden">
+          <IconButton
+            icon={
+              menuOpen ? (
+                <X size={23} />
+              ) : (
+                <Menu size={23} />
+              )
+            }
+            label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="eventgo-mobile-navigation"
+            onClick={() =>
+              setMenuOpen((value) => !value)
+            }
+          />
+        </div>
+      </div>
+
+      {menuOpen && (
+        <nav
+          id="eventgo-mobile-navigation"
+          aria-label="Mobile navigation"
+          className="relative z-10 flex flex-col gap-2 border-t border-[#EAE7E3] bg-white px-5 py-4 md:hidden"
+        >
+          {navigation.map((item) => (
+            <NavItem
+              key={item.href}
+              label={item.label}
+              href={item.href}
+              onNavigate={() => setMenuOpen(false)}
+            />
+          ))}
+
+          <div className="my-2 border-t border-[#EAE7E3]" />
+
+          <Link
+            href="/favorites"
+            onClick={() => setMenuOpen(false)}
+            className="flex items-center gap-3 rounded-lg p-3 text-sm font-semibold"
+          >
+            <Heart size={18} />
+            Favorites
+          </Link>
+
+          <Link
+            href="/notifications"
+            onClick={() => setMenuOpen(false)}
+            className="flex items-center gap-3 rounded-lg p-3 text-sm font-semibold"
+          >
+            <Bell size={18} />
+            Notifications
+          </Link>
+
+          {isAdmin && (
+            <a
+              href={ADMIN_URL}
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 rounded-lg p-3 text-sm font-semibold text-orange-600"
+            >
+              <LayoutDashboard size={18} />
+              Admin Dashboard
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex items-center justify-center gap-2 rounded-full bg-[#101828] p-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+          >
+            <LogOut size={18} />
+            {loggingOut ? "Logging out..." : "Logout"}
+          </button>
+        </nav>
+      )}
+
+      {logoutError && (
+        <div
+          role="alert"
+          className="relative z-10 bg-red-50 px-5 py-2 text-center text-sm text-red-700"
+        >
+          {logoutError}
+        </div>
+      )}
+    </header>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-auth\app\(auth)\login\page.tsx =====
+"use client";
+
+import { useState, type FormEvent } from "react";
+import Link from "next/link";
+
+type LoginResponse = {
+  message?: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+    role: "user" | "admin";
+  };
+  accessToken?: string;
+};
+
+export default function LoginPage() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (loading) return;
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/auth/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      const data: LoginResponse = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Login failed");
+        return;
+      }
+
+      if (!data.user || !data.accessToken) {
+        setError("Invalid server response");
+        return;
+      }
+
+      // Refresh Token is stored in an HttpOnly Cookie.
+      // Never store access or refresh tokens in localStorage.
+
+      const siteUrl =
+        process.env.NODE_ENV === "production"
+          ? "https://event-app-nine-rose.vercel.app"
+          : "http://localhost:3000";
+
+      if (data.user.role === "admin") {
+        window.location.replace(`${siteUrl}/admin`);
+        return;
+      }
+
+      if (data.user.role === "user") {
+        window.location.replace(siteUrl);
+        return;
+      }
+
+      setError("Unknown user role");
+    } catch {
+      setError("Unable to connect to the server");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="relative min-h-dvh overflow-hidden bg-[#261510] text-white">
+      {/* Background */}
+      <picture>
+        <source
+          media="(max-width: 767px)"
+          srcSet="/auth/images/login-mobile.png"
+        />
+        <img
+          src="/auth/images/login-desktop.png"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </picture>
+
+      {/* Background overlay */}
+      <div className="absolute inset-0 bg-black/10" />
+
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-6 md:px-16">
+        <Link
+          href="/login"
+          className="text-3xl font-extrabold tracking-tight"
+        >
+          Event<span className="text-orange-500">Go</span>
+        </Link>
+
+        <span className="hidden text-sm text-white/80 md:block">
+          Discover • Attend • Create Memories
+        </span>
+      </header>
+
+      {/* Login container */}
+      <div className="relative z-10 flex min-h-[calc(100dvh-100px)] items-center justify-center px-5 py-8">
+        <section
+          className="
+            login-entrance
+            w-full max-w-[580px]
+            rounded-[30px]
+            border border-white/30
+            bg-[#2b1714]/30
+            p-8 md:p-12
+            shadow-2xl
+            backdrop-blur-md
+          "
+        >
+          {/* Title */}
+          <div className="mb-9">
+            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
+              Welcome{" "}
+              <span className="text-orange-400">Back</span>
+            </h1>
+
+            <p className="mt-4 text-base leading-relaxed text-white/90">
+              Log in to your EventGo account and continue
+              your event journey.
+            </p>
+          </div>
+
+          {/* Login form */}
+          <form onSubmit={handleSubmit} className="space-y-7">
+            {/* Email */}
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-medium"
+              >
+                Email address
+              </label>
+
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                className="
+                  w-full rounded-xl
+                  border border-white/30
+                  bg-black/25
+                  px-5 py-4
+                  text-white
+                  outline-none
+                  transition
+                  placeholder:text-white/70
+                  focus:border-orange-400
+                  focus:bg-black/35
+                "
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium"
+              >
+                Password
+              </label>
+
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="
+                    w-full rounded-xl
+                    border border-white/30
+                    bg-black/25
+                    px-5 py-4 pr-20
+                    text-white
+                    outline-none
+                    transition
+                    placeholder:text-white/70
+                    focus:border-orange-400
+                    focus:bg-black/35
+                  "
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-orange-300 hover:text-orange-200"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember / Forgot */}
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={loading}
+                  className="h-4 w-4 accent-orange-500"
+                />
+                Remember me
+              </label>
+
+              <Link
+                href="/forgot-password"
+                className="text-orange-300 transition hover:text-orange-200"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <p
+                role="alert"
+                className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+              >
+                {error}
+              </p>
+            )}
+
+            {/* Login button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="
+                group flex w-full items-center justify-center gap-3
+                rounded-xl
+                bg-gradient-to-r from-orange-400 to-orange-600
+                px-5 py-4 text-lg font-semibold
+                shadow-lg shadow-orange-500/20
+                transition duration-300
+                hover:-translate-y-1
+                hover:shadow-orange-500/40
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+                disabled:hover:translate-y-0
+              "
+            >
+              {loading ? "Logging in..." : "Log In"}
+
+              {!loading && (
+                <span className="transition-transform group-hover:translate-x-2">
+                  →
+                </span>
+              )}
+            </button>
+          </form>
+
+          {/* Signup */}
+          <p className="mt-9 text-center text-sm text-white/90">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/signup"
+              className="font-semibold text-orange-300 transition hover:text-orange-200"
+            >
+              Sign Up
+            </Link>
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-auth\app\(auth)\signup\page.tsx =====
+
+"use client";
+
+import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+type SignupResponse = {
+  message?: string;
+  user?: {
+    id: string;
+    name?: string | null;
+    email?: string;
+  };
+};
+
+export default function SignupPage() {
+  const router = useRouter();
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (loading) return;
+
+    setError("");
+
+    if (name.trim().length < 2) {
+      setError("Name must contain at least 2 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/auth/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
+
+      const contentType =
+        response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        console.error(
+          "Signup API returned non-JSON response",
+          {
+            status: response.status,
+            contentType,
+          }
+        );
+
+        setError(
+          `Signup API error (HTTP ${response.status}).`
+        );
+        return;
+      }
+
+      const data: SignupResponse = await response.json();
+
+      if (!response.ok) {
+        setError(
+          data.message ||
+            `Account creation failed (HTTP ${response.status}).`
+        );
+        return;
+      }
+
+      if (!data.user?.id) {
+        setError("Invalid response from the server.");
+        return;
+      }
+
+      // Account created successfully.
+      // The user can now log in.
+      router.push("/login");
+    } catch (err) {
+      console.error("Signup request failed:", err);
+
+      setError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputStyle = `
+    w-full rounded-xl
+    border border-white/30
+    bg-black/25
+    px-5 py-3.5
+    text-white
+    outline-none
+    transition
+    placeholder:text-white/60
+    focus:border-orange-400
+    focus:bg-black/35
+  `;
+
+  return (
+    <main className="relative min-h-dvh overflow-hidden bg-[#261510] text-white">
+      {/* Background images */}
+      <picture>
+        <source
+          media="(max-width: 767px)"
+          srcSet="/auth/images/login-mobile.png"
+        />
+        <img
+          src="/auth/images/login-desktop.png"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </picture>
+
+      {/* Background overlay */}
+      <div className="absolute inset-0 bg-black/10" />
+
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-5 md:px-16">
+        <Link
+          href="/login"
+          className="text-3xl font-extrabold tracking-tight"
+        >
+          Event<span className="text-orange-500">Go</span>
+        </Link>
+
+        <span className="hidden text-sm text-white/80 md:block">
+          Discover • Attend • Create Memories
+        </span>
+      </header>
+
+      {/* Signup container */}
+      <div className="relative z-10 flex min-h-[calc(100dvh-85px)] items-center justify-center px-5 py-8">
+        {/* Glass card */}
+        <section
+          className="
+            login-entrance
+            w-full max-w-[580px]
+            rounded-[30px]
+            border border-white/30
+            bg-[#2b1714]/30
+            p-7 md:p-10
+            shadow-2xl
+            backdrop-blur-md
+          "
+        >
+          {/* Heading */}
+          <div className="mb-7 text-center">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-orange-400/40 bg-orange-500/15 px-4 py-2 text-xs font-medium text-orange-200">
+              ✨ Your next adventure starts here
+            </div>
+
+            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
+              Join{" "}
+              <span className="text-orange-400">
+                EventGo
+              </span>
+            </h1>
+
+            <p className="mt-3 text-sm leading-relaxed text-white/85 md:text-base">
+              Create your account and discover unforgettable
+              events near you.
+            </p>
+          </div>
+
+          {/* Signup Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
+            {/* Full Name */}
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-medium"
+              >
+                Full name
+              </label>
+
+              <input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="Enter your full name"
+                autoComplete="name"
+                minLength={2}
+                required
+                disabled={loading}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputStyle}
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-medium"
+              >
+                Email address
+              </label>
+
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
+                autoComplete="email"
+                required
+                disabled={loading}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputStyle}
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium"
+              >
+                Password
+              </label>
+
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Create a password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  disabled={loading}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                  }}
+                  className={`${inputStyle} pr-20`}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword(!showPassword)
+                  }
+                  disabled={loading}
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-orange-300 hover:text-orange-200"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="mb-2 block text-sm font-medium"
+              >
+                Confirm password
+              </label>
+
+              <div className="relative">
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={
+                    showConfirmPassword ? "text" : "password"
+                  }
+                  placeholder="Repeat your password"
+                  autoComplete="new-password"
+                  required
+                  disabled={loading}
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setError("");
+                  }}
+                  className={`${inputStyle} pr-20`}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowConfirmPassword(
+                      !showConfirmPassword
+                    )
+                  }
+                  disabled={loading}
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide confirmation"
+                      : "Show confirmation"
+                  }
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-orange-300 hover:text-orange-200"
+                >
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {/* Password guidance */}
+            <p className="text-xs text-white/70">
+              Use at least 8 characters for your password.
+            </p>
+
+            {/* Error message */}
+            {error && (
+              <p
+                role="alert"
+                className="rounded-lg border border-red-400/40 bg-red-950/60 px-4 py-3 text-sm text-red-100"
+              >
+                {error}
+              </p>
+            )}
+
+            {/* Signup button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="
+                group flex w-full
+                items-center justify-center gap-3
+                rounded-xl
+                bg-gradient-to-r
+                from-orange-400 to-orange-600
+                px-5 py-4
+                text-lg font-semibold
+                shadow-lg shadow-orange-500/20
+                transition duration-300
+                hover:-translate-y-1
+                hover:shadow-orange-500/40
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+                disabled:hover:translate-y-0
+              "
+            >
+              {loading
+                ? "Creating Account..."
+                : "Create Account"}
+
+              {!loading && (
+                <span className="transition-transform group-hover:translate-x-2">
+                  →
+                </span>
+              )}
+            </button>
+          </form>
+
+          {/* Login link */}
+          <p className="mt-7 text-center text-sm text-white/90">
+            Already have an account?{" "}
+            <Link
+              href="/login"
+              className="font-semibold text-orange-300 transition hover:text-orange-200"
+            >
+              Log In
+            </Link>
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-auth\app\page.tsx =====
+import Image from "next/image";
+
+export default function Home() {
+  return (
+    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+        <Image
+          className="dark:invert h-5 w-[100px]"
+          src="/next.svg"
+          alt="Next.js logo"
+          width={100}
+          height={20}
+          priority
+        />
+        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
+          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
+            To get started, edit the{" "}
+            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
+              page.tsx
+            </code>{" "}
+            file.
+          </h1>
+          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+            Looking for a starting point or more instructions? Head over to{" "}
+            <a
+              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+              className="font-medium text-zinc-950 dark:text-zinc-50"
+            >
+              Templates
+            </a>{" "}
+            or the{" "}
+            <a
+              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+              className="font-medium text-zinc-950 dark:text-zinc-50"
+            >
+              Learning
+            </a>{" "}
+            center.
+          </p>
+        </div>
+        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+          <a
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
+            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              className="dark:invert h-[14px] w-4"
+              src="/vercel.svg"
+              alt="Vercel logomark"
+              width={16}
+              height={14}
+            />
+            Deploy Now
+          </a>
+          <a
+            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
+            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Documentation
+          </a>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\cities\page.tsx =====
+
+import { Suspense } from "react";
+import Link from "next/link";
+
+import {
+  MapPin,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Globe2,
+} from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import { getAdminCitiesAction } from "../actions/cities.actions";
+
+interface CitiesPageProps {
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+  }>;
+}
+
+function createUrl(page: number, search: string) {
+  const params = new URLSearchParams();
+
+  params.set("page", String(page));
+
+  if (search) {
+    params.set("q", search);
+  }
+
+  return `/cities?${params.toString()}`;
+}
+
+async function CitiesContent({
+  searchParams,
+}: CitiesPageProps) {
+  const params = await searchParams;
+
+  const requestedPage = Number(params.page ?? "1");
+
+  const page =
+    Number.isSafeInteger(requestedPage) &&
+    requestedPage > 0
+      ? requestedPage
+      : 1;
+
+  const search = (params.q ?? "").slice(0, 200);
+
+  const result = await getAdminCitiesAction(page, search);
+
+  const firstItem =
+    result.total === 0
+      ? 0
+      : (page - 1) * result.pageSize + 1;
+
+  const lastItem = Math.min(
+    page * result.pageSize,
+    result.total
+  );
+
+  return (
+    <div className="w-full space-y-7 2xl:space-y-9">
+      <section>
+        <h1 className="text-3xl font-extrabold tracking-tight 2xl:text-4xl">
+          Cities
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-500 2xl:text-base">
+          Browse and search cities available in EventGo.
+        </p>
+      </section>
+
+      <section className="grid gap-5 sm:grid-cols-2">
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0EC]">
+              <MapPin className="h-7 w-7 text-[#FF6B53]" />
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500">
+                Matching Cities
+              </p>
+
+              <p className="mt-1 text-3xl font-extrabold text-[#08111D]">
+                {result.total.toLocaleString("de-DE")}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+              <Globe2 className="h-7 w-7 text-blue-600" />
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500">
+                Cities on This Page
+              </p>
+
+              <p className="mt-1 text-3xl font-extrabold text-[#08111D]">
+                {result.cities.length}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <h2 className="text-xl font-bold">
+            All Cities
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Search cities by name or country code.
+          </p>
+
+          <form
+            action="/cities"
+            method="GET"
+            className="mt-6 flex flex-wrap gap-3"
+          >
+            <div className="relative min-w-[220px] flex-1">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <Input
+                name="q"
+                type="search"
+                maxLength={200}
+                defaultValue={search}
+                placeholder="Search city or country code..."
+                className="h-11 border-slate-200 bg-white pl-11 text-[#08111D] placeholder:text-slate-400"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="h-11 bg-[#FF6B53] px-6 text-white hover:bg-[#F15D45]"
+            >
+              Search
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-11"
+              render={<Link href="/cities" />}
+            >
+              Reset
+            </Button>
+          </form>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm 2xl:text-base">
+            <thead className="bg-[#F5F7FA] text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-6 py-4">City</th>
+                <th className="px-6 py-4">Country</th>
+                <th className="px-6 py-4">Latitude</th>
+                <th className="px-6 py-4">Longitude</th>
+                <th className="px-6 py-4">City ID</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {result.cities.map((city) => (
+                <tr
+                  key={city.id}
+                  className="transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-[#FFF0EC] p-2 text-[#FF6B53]">
+                        <MapPin size={17} />
+                      </div>
+
+                      <span className="font-semibold text-[#08111D]">
+                        {city.name}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                      {city.countryCode}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 font-mono text-slate-600">
+                    {city.latitude.toFixed(5)}
+                  </td>
+
+                  <td className="px-6 py-4 font-mono text-slate-600">
+                    {city.longitude.toFixed(5)}
+                  </td>
+
+                  <td className="px-6 py-4 font-mono text-slate-500">
+                    {city.id}
+                  </td>
+                </tr>
+              ))}
+
+              {result.cities.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-16 text-center text-slate-500"
+                  >
+                    No cities found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 p-6">
+          <p className="text-sm text-slate-500">
+            Showing {firstItem}–{lastItem} of{" "}
+            {result.total.toLocaleString("de-DE")}
+          </p>
+
+          <div className="flex items-center gap-3">
+            {page > 1 ? (
+              <Link
+                href={createUrl(page - 1, search)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                <ChevronLeft size={16} />
+                Previous
+              </span>
+            )}
+
+            <span className="text-sm font-semibold">
+              {page} / {Math.max(result.totalPages, 1)}
+            </span>
+
+            {page < result.totalPages ? (
+              <Link
+                href={createUrl(page + 1, search)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              >
+                Next
+                <ChevronRight size={16} />
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                Next
+                <ChevronRight size={16} />
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CitiesLoading() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-[60vh] items-center justify-center"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#FF6B53]" />
+
+        <p className="text-sm text-slate-500">
+          Loading cities...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function CitiesPage(props: CitiesPageProps) {
+  return (
+    <main className="min-h-full w-full bg-[#F5F7FA] p-5 text-[#08111D] lg:p-8 2xl:p-10">
+      <Suspense fallback={<CitiesLoading />}>
+        <CitiesContent searchParams={props.searchParams} />
+      </Suspense>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\manage-events\page.tsx =====
+
+import { EventForm } from "@/ui/organisms/manage-events/EventForm/EventForm";
+
+export default function ManageEventsPage() {
+  return (
+    <main className="min-h-screen bg-[#FCFAF7] px-5 py-12 lg:px-10">
+      <div className="mx-auto max-w-[1280px]">
+        <div className="mb-10">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#FF6B53]">
+            EventGo Administration
+          </p>
+
+          <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-[#08111D]">
+            Add New Event
+          </h1>
+
+          <p className="mt-3 text-slate-500">
+            Create a new event and configure ticket availability.
+          </p>
+        </div>
+
+        <EventForm />
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\orders\page.tsx =====
+
+import { Suspense } from "react";
+import Link from "next/link";
+
+import {
+  ShoppingBag,
+  CheckCircle2,
+  Clock3,
+  Wallet,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import { getAdminOrdersAction } from "../actions/orders.actions";
+
+type SearchParams = {
+  page?: string;
+  q?: string;
+  status?: string;
+};
+
+interface OrdersPageProps {
+  searchParams: Promise<SearchParams>;
+}
+
+const moneyFormatter = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+});
+
+function formatMoney(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency,
+    }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+}
+
+function formatDate(date: string | null) {
+  if (!date) return "—";
+
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Berlin",
+  }).format(new Date(date));
+}
+
+function statusStyle(status: string) {
+  switch (status) {
+    case "PAID":
+      return "bg-green-50 text-green-700";
+    case "DEMO_PAID":
+      return "bg-orange-50 text-orange-700";
+    case "PENDING":
+      return "bg-amber-50 text-amber-700";
+    case "CANCELLED":
+    case "FAILED":
+      return "bg-red-50 text-red-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+function pageUrl(
+  page: number,
+  search: string,
+  status: string
+) {
+  const params = new URLSearchParams();
+
+  if (search) params.set("q", search);
+  if (status) params.set("status", status);
+  params.set("page", String(page));
+
+  return `/orders?${params.toString()}`;
+}
+
+async function OrdersContent({
+  searchParams,
+}: OrdersPageProps) {
+  const params = await searchParams;
+
+  const requestedPage = Number(params.page ?? "1");
+  const page =
+    Number.isSafeInteger(requestedPage) &&
+    requestedPage > 0
+      ? requestedPage
+      : 1;
+
+  const search = (params.q ?? "").slice(0, 200);
+  const allowedStatuses = [
+    "",
+    "PAID",
+    "DEMO_PAID",
+    "PENDING",
+    "CANCELLED",
+    "FAILED",
+  ];
+
+  const status = allowedStatuses.includes(params.status ?? "")
+    ? (params.status ?? "")
+    : "";
+
+  const result = await getAdminOrdersAction(
+    page,
+    search,
+    status
+  );
+
+  const cards = [
+    {
+      title: "Total Orders",
+      value: result.stats.totalOrders.toLocaleString("de-DE"),
+      icon: ShoppingBag,
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
+    },
+    {
+      title: "Paid Orders",
+      value: result.stats.paidOrders.toLocaleString("de-DE"),
+      icon: CheckCircle2,
+      iconBg: "bg-green-50",
+      iconColor: "text-green-600",
+    },
+    {
+      title: "Pending Orders",
+      value: result.stats.pendingOrders.toLocaleString("de-DE"),
+      icon: Clock3,
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
+    },
+    {
+      title: "Revenue (EUR)",
+      value: moneyFormatter.format(result.stats.revenueEUR),
+      icon: Wallet,
+      iconBg: "bg-[#FFF0EC]",
+      iconColor: "text-[#FF6B53]",
+    },
+  ];
+
+  const firstItem =
+    result.total === 0
+      ? 0
+      : (page - 1) * result.pageSize + 1;
+
+  const lastItem = Math.min(
+    page * result.pageSize,
+    result.total
+  );
+
+  return (
+    <div className="space-y-7 2xl:space-y-9">
+      <section>
+        <h1 className="text-3xl font-extrabold tracking-tight 2xl:text-4xl">
+          Orders
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-500 2xl:text-base">
+          Manage customer purchases and ticket orders.
+        </p>
+      </section>
+
+      <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-7">
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <Card
+              key={card.title}
+              className="rounded-2xl border-slate-200 bg-white shadow-sm"
+            >
+              <CardContent className="flex items-center gap-4 p-5 2xl:p-7">
+                <div
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${card.iconBg}`}
+                >
+                  <Icon className={`h-7 w-7 ${card.iconColor}`} />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-500">
+                    {card.title}
+                  </p>
+
+                  <p className="mt-1 break-words text-2xl font-extrabold 2xl:text-3xl">
+                    {card.value}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <h2 className="text-xl font-bold">
+            All Orders
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {result.total} matching orders
+          </p>
+
+          <form
+            action="/orders"
+            method="GET"
+            className="mt-6 flex flex-wrap gap-3"
+          >
+            <div className="relative min-w-[250px] flex-[2]">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <Input
+                name="q"
+                type="search"
+                maxLength={200}
+                defaultValue={search}
+                placeholder="Search order ID, customer or email..."
+                className="h-11 border-slate-200 bg-white pl-11 text-[#08111D]"
+              />
+            </div>
+
+            <select
+              name="status"
+              defaultValue={status}
+              aria-label="Filter by status"
+              className="h-11 min-w-[185px] rounded-lg border border-slate-200 bg-white px-4 text-sm text-[#08111D]"
+            >
+              <option value="">All Statuses</option>
+              <option value="PAID">Paid</option>
+              <option value="DEMO_PAID">Demo Paid</option>
+              <option value="PENDING">Pending</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="FAILED">Failed</option>
+            </select>
+
+            <Button
+              type="submit"
+              className="h-11 bg-[#FF6B53] px-6 text-white hover:bg-[#F15D45]"
+            >
+              Search
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-11"
+              render={<Link href="/orders" />}
+            >
+              Reset
+            </Button>
+          </form>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-sm 2xl:text-base">
+            <thead className="bg-[#F5F7FA] text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-6 py-4">Order ID</th>
+                <th className="px-6 py-4">Customer</th>
+                <th className="px-6 py-4">Tickets</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Date</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {result.orders.map((order) => (
+                <tr
+                  key={order.id}
+                  className="transition hover:bg-[#F8FAFC]"
+                >
+                  <td className="px-6 py-4">
+                    <span
+                      title={order.id}
+                      className="font-mono text-xs font-semibold text-[#08111D]"
+                    >
+                      {order.id.slice(0, 8)}…
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <p className="font-semibold text-[#08111D]">
+                      {order.customerName}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {order.customerEmail}
+                    </p>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {order.ticketCount}
+                  </td>
+
+                  <td className="px-6 py-4 font-semibold">
+                    {formatMoney(
+                      order.totalAmount,
+                      order.currency
+                    )}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyle(order.status)}`}
+                    >
+                      {order.status}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 text-slate-500">
+                    {formatDate(order.createdAt)}
+                  </td>
+                </tr>
+              ))}
+
+              {result.orders.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-6 py-16 text-center text-slate-500"
+                  >
+                    No orders found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 p-6">
+          <p className="text-sm text-slate-500">
+            Showing {firstItem}–{lastItem} of {result.total}
+          </p>
+
+          <div className="flex items-center gap-3">
+            {page > 1 ? (
+              <Link
+                href={pageUrl(page - 1, search, status)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                <ChevronLeft size={16} />
+                Previous
+              </span>
+            )}
+
+            <span className="text-sm font-semibold">
+              {page} / {Math.max(result.totalPages, 1)}
+            </span>
+
+            {page < result.totalPages ? (
+              <Link
+                href={pageUrl(page + 1, search, status)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              >
+                Next
+                <ChevronRight size={16} />
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                Next
+                <ChevronRight size={16} />
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function OrdersLoading() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-[60vh] items-center justify-center"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#FF6B53]" />
+        <p className="text-sm text-slate-500">
+          Loading orders...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function OrdersPage(props: OrdersPageProps) {
+  return (
+    <div className="min-h-full w-full bg-[#F5F7FA] p-5 text-[#08111D] lg:p-8 2xl:p-10">
+      <Suspense fallback={<OrdersLoading />}>
+        <OrdersContent searchParams={props.searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\participants\page.tsx =====
+
+import Link from "next/link";
+import {
+  Users,
+  Ticket,
+  CalendarDays,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+import {
+  getParticipantsAction,
+  getParticipantEventsAction,
+} from "../actions/participants.actions";
+
+type SearchParams = {
+  page?: string;
+  q?: string;
+  event?: string;
+};
+
+interface ParticipantsPageProps {
+  searchParams: Promise<SearchParams>;
+}
+
+function buildUrl(
+  page: number,
+  search: string,
+  eventId: string
+) {
+  const params = new URLSearchParams();
+
+  if (search) params.set("q", search);
+  if (eventId) params.set("event", eventId);
+  params.set("page", String(page));
+
+  return `/participants?${params.toString()}`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Berlin",
+  }).format(new Date(value));
+}
+
+export default async function ParticipantsPage({
+  searchParams,
+}: ParticipantsPageProps) {
+  const params = await searchParams;
+
+  const rawPage = Number(params.page ?? "1");
+
+  const page =
+    Number.isSafeInteger(rawPage) && rawPage > 0
+      ? rawPage
+      : 1;
+
+  const search = (params.q ?? "").slice(0, 200);
+  const eventId = params.event ?? "";
+
+  const [result, availableEvents] = await Promise.all([
+    getParticipantsAction(page, search, eventId),
+    getParticipantEventsAction(),
+  ]);
+
+  const stats = [
+    {
+      label: "Participants",
+      value: result.totalParticipants,
+      icon: Users,
+    },
+    {
+      label: "Tickets",
+      value: result.totalTickets,
+      icon: Ticket,
+    },
+    {
+      label: "Events with attendees",
+      value: result.eventsWithParticipants,
+      icon: CalendarDays,
+    },
+  ];
+
+  return (
+    <main className="min-h-screen w-full bg-[#F5F7FA] px-5 py-8 text-[#08111D] lg:px-8 2xl:px-10">
+    <div className="w-full min-w-0 space-y-8">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#FF6B53]">
+            EventGo Administration
+          </p>
+
+          <h1 className="mt-3 text-4xl font-extrabold tracking-tight">
+            Participants
+          </h1>
+
+          <p className="mt-3 text-slate-500">
+            View attendees, ticket details, and event registrations.
+          </p>
+        </div>
+
+        {/* STATISTICS */}
+        <div className="grid gap-5 md:grid-cols-3">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+
+            return (
+              <div
+                key={stat.label}
+                className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-500">
+                    {stat.label}
+                  </p>
+
+                  <div className="rounded-xl bg-[#FFF0EC] p-3 text-[#FF6B53]">
+                    <Icon size={21} />
+                  </div>
+                </div>
+
+                <p className="mt-4 text-3xl font-extrabold">
+                  {stat.value.toLocaleString("de-DE")}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* PARTICIPANTS TABLE */}
+        <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-6">
+            <h2 className="text-xl font-bold">
+              All Participants
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {result.total.toLocaleString("de-DE")} ticket
+              records found
+            </p>
+
+            {/* SEARCH AND FILTER */}
+            <form
+              action="/participants"
+              method="GET"
+              className="mt-6 flex flex-wrap gap-3"
+            >
+              <div className="relative min-w-[280px] flex-[2]">
+                <Search
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  key={search}
+                  name="q"
+                  type="search"
+                  maxLength={200}
+                  defaultValue={search}
+                  placeholder="Search name, email, event..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-[#08111D] placeholder:text-slate-400 outline-none focus:border-[#FF6B53]"
+                />
+              </div>
+
+              <select
+                key={eventId}
+                name="event"
+                defaultValue={eventId}
+                aria-label="Filter by event"
+                className="min-w-[200px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-[#08111D] outline-none focus:border-[#FF6B53]"
+              >
+                <option value="">All Events</option>
+
+                {availableEvents.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="submit"
+                className="rounded-xl bg-[#FF6B53] px-6 py-3 font-semibold text-white hover:bg-[#F15D45]"
+              >
+                Search
+              </button>
+
+              <Link
+                href="/participants"
+                className="flex items-center rounded-xl border border-slate-200 px-5 py-3 font-semibold text-[#08111D] hover:bg-slate-50"
+              >
+                Reset
+              </Link>
+            </form>
+          </div>
+
+          {/* TABLE */}
+          <div className="overflow-x-auto">
+           <table className="w-full min-w-[1100px] text-left text-sm 2xl:text-base">
+              <thead className="bg-[#FCFAF7] text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-6 py-4">Participant</th>
+                  <th className="px-6 py-4">Event</th>
+                  <th className="px-6 py-4">Ticket Type</th>
+                  <th className="px-6 py-4">Ticket Status</th>
+                  <th className="px-6 py-4">Order Status</th>
+                  <th className="px-6 py-4">Purchase Date</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {result.participants.map((participant) => (
+                  <tr
+                    key={participant.ticket_id}
+                    className="hover:bg-[#FCFAF7]"
+                  >
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-[#08111D]">
+                        {participant.participant_name ||
+                          "Unnamed user"}
+                      </p>
+
+                      <p className="mt-1 text-slate-500">
+                        {participant.email}
+                      </p>
+                    </td>
+
+                    <td className="px-6 py-4 font-medium">
+                      {participant.event_title}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {participant.ticket_type}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {participant.ticket_status}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-[#FFF0EC] px-3 py-1 text-xs font-semibold text-[#C75039]">
+                        {participant.order_status}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4 text-slate-500">
+                      {formatDate(participant.purchased_at)}
+                    </td>
+                  </tr>
+                ))}
+
+                {result.participants.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-16 text-center"
+                    >
+                      <Users
+                        size={36}
+                        className="mx-auto mb-3 text-slate-300"
+                      />
+
+                      <p className="font-semibold text-[#08111D]">
+                        No participants found
+                      </p>
+
+                      <p className="mt-2 text-slate-500">
+                        No ticket records match your filters.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 p-6">
+            <p className="text-sm text-slate-500">
+              {result.total === 0
+                ? "Showing 0 records"
+                : `Showing ${
+                    (page - 1) * result.pageSize + 1
+                  }–${Math.min(
+                    page * result.pageSize,
+                    result.total
+                  )} of ${result.total}`}
+            </p>
+
+            <div className="flex items-center gap-3">
+              {page > 1 ? (
+                <Link
+                  href={buildUrl(page - 1, search, eventId)}
+                  className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                >
+                  <ChevronLeft size={17} />
+                  Previous
+                </Link>
+              ) : (
+                <span className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                  <ChevronLeft size={17} />
+                  Previous
+                </span>
+              )}
+
+              <span className="text-sm font-semibold">
+                Page {page} of {Math.max(result.totalPages, 1)}
+              </span>
+
+              {page < result.totalPages ? (
+                <Link
+                  href={buildUrl(page + 1, search, eventId)}
+                  className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                >
+                  Next
+                  <ChevronRight size={17} />
+                </Link>
+              ) : (
+                <span className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-400">
+                  Next
+                  <ChevronRight size={17} />
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\statistics\page.tsx =====
+
+import { Suspense } from "react";
+
+import {
+  Wallet,
+  Ticket,
+  CalendarDays,
+  Users,
+  ChartNoAxesCombined,
+} from "lucide-react";
+
+import {
+  getSalesOverviewAction,
+  getDailyRevenueAction,
+  getDailyTicketSalesAction,
+  getEventsByCategoryAction,
+  getMostPopularEventsAction,
+  getUserGrowthAction,
+  getSalesHeatmapAction,
+} from "../actions/analytics.actions";
+
+import { StatCard } from "@/ui/molecules/StatCard/StatCard";
+import { ChartTools } from "@/ui/molecules/ChartTools/ChartTools";
+
+import { RevenueChart } from "@/ui/organisms/statistics/RevenueChart/RevenueChart";
+import { TicketSalesChart } from "@/ui/organisms/statistics/TicketSalesChart/TicketSalesChart";
+import { CategoryChart } from "@/ui/organisms/statistics/CategoryChart/CategoryChart";
+import { PopularEventsChart } from "@/ui/organisms/statistics/PopularEventsChart/PopularEventsChart";
+import { UserGrowthChart } from "@/ui/organisms/statistics/UserGrowthChart/UserGrowthChart";
+import { SalesHeatmap } from "@/ui/organisms/statistics/SalesHeatmap/SalesHeatmap";
+
+async function StatisticsContent() {
+  const [
+    sales,
+    revenueData,
+    ticketSalesData,
+    categoryData,
+    popularEventsData,
+    userGrowthData,
+    salesHeatmapData,
+  ] = await Promise.all([
+    getSalesOverviewAction(),
+    getDailyRevenueAction(),
+    getDailyTicketSalesAction(),
+    getEventsByCategoryAction(),
+    getMostPopularEventsAction(),
+    getUserGrowthAction(),
+    getSalesHeatmapAction(),
+  ]);
+
+  const totalEvents = categoryData.reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
+
+  const totalUsers =
+    userGrowthData.length > 0
+      ? userGrowthData[userGrowthData.length - 1].users
+      : 0;
+
+  return (
+    <div className="w-full space-y-8 2xl:space-y-10">
+      {/* PAGE HEADER */}
+      <section className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#FF6B53]">
+            <ChartNoAxesCombined size={19} />
+            Analytics
+          </div>
+
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#08111D] 2xl:text-4xl">
+            Statistics Overview
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-500 2xl:text-base">
+            Track revenue, ticket sales and event performance.
+          </p>
+        </div>
+      </section>
+
+      {/* STATISTICS CARDS */}
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-7">
+        <StatCard
+          title="Demo Revenue"
+          value={`${sales.totalRevenue.toFixed(2)} €`}
+          icon={Wallet}
+          description="Demo payments only"
+        />
+
+        <StatCard
+          title="Tickets Sold (Demo)"
+          value={String(sales.ticketsSold)}
+          icon={Ticket}
+          description={`${sales.totalOrders} demo orders`}
+        />
+
+        <StatCard
+          title="Total Events"
+          value={String(totalEvents)}
+          icon={CalendarDays}
+          description="Events in database"
+        />
+
+        <StatCard
+          title="Total Users"
+          value={String(totalUsers)}
+          icon={Users}
+          description="Registered users"
+        />
+      </section>
+
+      {/* ANALYTICS CHARTS */}
+      <section className="grid min-w-0 grid-cols-1 items-stretch gap-6 xl:grid-cols-2 2xl:gap-8">
+        <div className="min-w-0">
+          <ChartTools title="Revenue Overview">
+            <RevenueChart data={revenueData} />
+          </ChartTools>
+        </div>
+
+        <div className="min-w-0">
+          <ChartTools title="Ticket Sales">
+            <TicketSalesChart data={ticketSalesData} />
+          </ChartTools>
+        </div>
+
+        <div className="min-w-0">
+          <ChartTools title="Events by Category">
+            <CategoryChart data={categoryData} />
+          </ChartTools>
+        </div>
+
+        <div className="min-w-0">
+          <ChartTools title="Most Popular Events">
+            <PopularEventsChart data={popularEventsData} />
+          </ChartTools>
+        </div>
+
+        <div className="min-w-0">
+          <ChartTools title="User Growth">
+            <UserGrowthChart data={userGrowthData} />
+          </ChartTools>
+        </div>
+
+        <div className="min-w-0">
+          <ChartTools title="Sales by Day and Hour">
+            <SalesHeatmap data={salesHeatmapData} />
+          </ChartTools>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StatisticsLoading() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-[65vh] items-center justify-center"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#FF6B53]" />
+
+        <p className="text-sm font-medium text-slate-500">
+          Loading analytics...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function StatisticsPage() {
+  return (
+    <div className="min-h-full w-full bg-[#F5F7FA] p-5 text-[#08111D] lg:p-8 2xl:p-10">
+      <Suspense fallback={<StatisticsLoading />}>
+        <StatisticsContent />
+      </Suspense>
+    </div>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\ticket-types\page.tsx =====
+
+import { Suspense } from "react";
+import Link from "next/link";
+
+import {
+  Ticket,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import { getAdminTicketTypesAction } from "../actions/ticket-types.actions";
+
+interface PageProps {
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+  }>;
+}
+
+function formatMoney(price: number, currency: string) {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+  }).format(price);
+}
+
+function createUrl(page: number, search: string) {
+  const params = new URLSearchParams();
+
+  params.set("page", String(page));
+
+  if (search) {
+    params.set("q", search);
+  }
+
+  return `/ticket-types?${params.toString()}`;
+}
+
+async function TicketTypesContent({
+  searchParams,
+}: PageProps) {
+  const params = await searchParams;
+
+  const requestedPage = Number(params.page ?? 1);
+  const page =
+    Number.isSafeInteger(requestedPage) &&
+    requestedPage > 0
+      ? requestedPage
+      : 1;
+
+  const search = (params.q ?? "").slice(0, 200);
+
+  const result = await getAdminTicketTypesAction(
+    page,
+    search
+  );
+
+  return (
+    <div className="w-full space-y-7">
+      <section>
+        <h1 className="text-3xl font-extrabold tracking-tight 2xl:text-4xl">
+          Ticket Types
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-500">
+          View ticket prices, quantities and sales.
+        </p>
+      </section>
+
+      <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
+        <CardContent className="flex items-center gap-4 p-6">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0EC]">
+            <Ticket className="h-7 w-7 text-[#FF6B53]" />
+          </div>
+
+          <div>
+            <p className="text-sm text-slate-500">
+              Total Ticket Types
+            </p>
+
+            <p className="text-3xl font-extrabold">
+              {result.total.toLocaleString("de-DE")}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <h2 className="text-xl font-bold">
+            All Ticket Types
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Ticket availability by event
+          </p>
+
+          <form
+            action="/ticket-types"
+            method="GET"
+            className="mt-6 flex flex-wrap gap-3"
+          >
+            <div className="relative min-w-[220px] flex-1">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <Input
+                name="q"
+                defaultValue={search}
+                placeholder="Search event or ticket type..."
+                maxLength={200}
+                className="h-11 bg-white pl-11 text-[#08111D]"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="h-11 bg-[#FF6B53] px-6 text-white hover:bg-[#F15D45]"
+            >
+              Search
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-11"
+              render={<Link href="/ticket-types" />}
+            >
+              Reset
+            </Button>
+          </form>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm 2xl:text-base">
+            <thead className="bg-[#F5F7FA] text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-6 py-4">Event</th>
+                <th className="px-6 py-4">Ticket Type</th>
+                <th className="px-6 py-4">Price</th>
+                <th className="px-6 py-4">Quantity</th>
+                <th className="px-6 py-4">Sold</th>
+                <th className="px-6 py-4">Available</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {result.ticketTypes.map((ticketType) => (
+                <tr
+                  key={ticketType.id}
+                  className="hover:bg-[#F8FAFC]"
+                >
+                  <td className="px-6 py-4 font-semibold text-[#08111D]">
+                    {ticketType.eventTitle}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-[#FFF0EC] px-3 py-1 text-xs font-semibold text-[#D45A45]">
+                      {ticketType.name}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 font-semibold">
+                    {formatMoney(
+                      ticketType.price,
+                      ticketType.currency
+                    )}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {ticketType.quantity}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {ticketType.sold}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        ticketType.available === 0
+                          ? "bg-red-50 text-red-700"
+                          : "bg-green-50 text-green-700"
+                      }`}
+                    >
+                      {ticketType.available}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+
+              {result.ticketTypes.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-6 py-14 text-center text-slate-500"
+                  >
+                    No ticket types found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 p-6">
+          <p className="text-sm text-slate-500">
+            {result.total} matching ticket types
+          </p>
+
+          <div className="flex items-center gap-3">
+            {page > 1 ? (
+              <Link
+                href={createUrl(page - 1, search)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </Link>
+            ) : (
+              <span className="text-sm text-slate-400">
+                Previous
+              </span>
+            )}
+
+            <span className="text-sm font-semibold">
+              {page} / {Math.max(result.totalPages, 1)}
+            </span>
+
+            {page < result.totalPages ? (
+              <Link
+                href={createUrl(page + 1, search)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold"
+              >
+                Next
+                <ChevronRight size={16} />
+              </Link>
+            ) : (
+              <span className="text-sm text-slate-400">
+                Next
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TicketTypesLoading() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-[60vh] items-center justify-center"
+    >
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#FF6B53]" />
+    </div>
+  );
+}
+
+export default function TicketTypesPage(props: PageProps) {
+  return (
+    <main className="min-h-full w-full bg-[#F5F7FA] p-5 text-[#08111D] lg:p-8 2xl:p-10">
+      <Suspense fallback={<TicketTypesLoading />}>
+        <TicketTypesContent
+          searchParams={props.searchParams}
+        />
+      </Suspense>
+    </main>
+  );
+}
+
+===== C:\Users\omarm\Downloads\EventGo\eventgo-admin\src\app\page.tsx =====
+
+import { Suspense } from "react";
+
+import {
+  Wallet,
+  Ticket,
+  CalendarDays,
+  Users,
+} from "lucide-react";
+
+import { DashboardStatCard } from "@/components/molecules/DashboardStatCard/DashboardStatCard";
+import { DashboardCharts } from "@/components/organisms/DashboardCharts/DashboardCharts";
+import { PlatformActivityChart } from "@/components/organisms/dashboard/PlatformActivityChart/PlatformActivityChart";
+import { EventCategoriesCard } from "@/components/organisms/dashboard/EventCategoriesCard/EventCategoriesCard";
+import { TopPerformingEventsCard } from "@/components/organisms/dashboard/TopPerformingEventsCard/TopPerformingEventsCard";
+import { EventParticipantsCard } from "@/components/organisms/dashboard/EventParticipantsCard/EventParticipantsCard";
+import { RecentEventsTable } from "@/components/organisms/dashboard/RecentEventsTable/RecentEventsTable";
+import { RecentParticipantsCard } from "@/components/organisms/dashboard/RecentParticipantsCard/RecentParticipantsCard";
+
+import { getDashboardDataAction } from "./actions/dashboard.actions";
+
+const categoryColors = [
+  "#FF6B53",
+  "#4F8EF7",
+  "#9B5CF6",
+  "#33C26B",
+  "#F6C453",
+  "#A0AEC0",
+];
+
+const dateFormatter = new Intl.DateTimeFormat("de-DE", {
+  dateStyle: "medium",
+  timeZone: "Europe/Berlin",
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat("de-DE", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "Europe/Berlin",
+});
+
+const integerFormatter = new Intl.NumberFormat("de-DE");
+
+const currencyFormatter = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+});
+
+async function DashboardContent() {
+  const {
+    metrics,
+    dailyData,
+    categories,
+    topEvents: dbTopEvents,
+    participantEvents: dbParticipantEvents,
+    recentEvents: dbRecentEvents,
+    recentParticipants: dbRecentParticipants,
+  } = await getDashboardDataAction();
+
+  // Only confirmed sales and bookings, according
+  // to the statuses configured in dashboard.service.ts.
+  const stats = [
+    {
+      label: "Total Revenue",
+      value: currencyFormatter.format(metrics.totalRevenue),
+      icon: Wallet,
+      color: "coral" as const,
+    },
+    {
+      label: "Tickets Sold",
+      value: integerFormatter.format(metrics.ticketsSold),
+      icon: Ticket,
+      color: "blue" as const,
+    },
+    {
+      label: "Events with Sales",
+      value: integerFormatter.format(metrics.totalEvents),
+      icon: CalendarDays,
+      color: "purple" as const,
+    },
+    {
+      label: "Customers",
+      value: integerFormatter.format(metrics.totalUsers),
+      icon: Users,
+      color: "green" as const,
+    },
+  ];
+
+  const categoryData = categories.map((category, index) => ({
+    name: category.name,
+    value: category.value,
+    color: categoryColors[index % categoryColors.length],
+  }));
+
+  const topEvents = dbTopEvents.map((event, index) => ({
+    rank: index + 1,
+    title: event.title,
+    location: event.city,
+    ticketsSold: event.ticketsSold,
+  }));
+
+  // Unique customers per event.
+  const participantEvents = dbParticipantEvents.map(
+    (event, index) => ({
+      rank: index + 1,
+      title: event.title,
+      location: event.city,
+      count: event.ticketsSold,
+    })
+  );
+
+  const recentEvents = dbRecentEvents.map((event) => ({
+    id: event.id,
+    title: event.title,
+    city: event.city,
+    category: event.category,
+    date: dateFormatter.format(new Date(event.startsAt)),
+    tickets: `${event.ticketsSold} / ${event.capacity}`,
+    status: event.isDemo ? "Demo" : "Real",
+  }));
+
+  const recentParticipants = dbRecentParticipants.map(
+    (participant) => ({
+      id: participant.id,
+      name: participant.name,
+      email: participant.email,
+      eventTitle: participant.eventTitle,
+      timeAgo: participant.purchasedAt
+        ? dateTimeFormatter.format(
+            new Date(participant.purchasedAt)
+          )
+        : "—",
+    })
+  );
+
+  // Normalize revenue and tickets separately.
+  // This is a relative activity comparison, not raw amounts.
+  const maxRevenue = Math.max(
+    1,
+    ...dailyData.map((item) => item.revenue)
+  );
+
+  const maxTickets = Math.max(
+    1,
+    ...dailyData.map((item) => item.tickets)
+  );
+
+  const platformActivityData = dailyData.map((item) => ({
+    date: item.date.slice(5),
+    revenue: Math.round(
+      (item.revenue / maxRevenue) * 100
+    ),
+    tickets: Math.round(
+      (item.tickets / maxTickets) * 100
+    ),
+  }));
+
+  return (
+    <div className="w-full space-y-7 2xl:space-y-9">
+      {/* DASHBOARD HEADER */}
+      <section>
+        <h1 className="text-3xl font-extrabold tracking-tight text-[#08111D] 2xl:text-4xl">
+          Dashboard Overview
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-500 2xl:text-base">
+          Sales, bookings and participation across your events.
+        </p>
+      </section>
+
+      {/* METRICS */}
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-7">
+        {stats.map((stat) => (
+          <DashboardStatCard
+            key={stat.label}
+            {...stat}
+          />
+        ))}
+      </section>
+
+      {/* REVENUE AND TICKET SALES */}
+      <section className="min-w-0">
+        <DashboardCharts data={dailyData} />
+      </section>
+
+      {/* FULL WIDTH PLATFORM ACTIVITY */}
+      <section className="min-w-0">
+        <PlatformActivityChart
+          data={platformActivityData}
+        />
+      </section>
+
+      {/* CATEGORIES AND TOP EVENTS */}
+      <section className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+        <EventCategoriesCard
+          data={categoryData}
+          totalEvents={metrics.totalEvents}
+        />
+
+        <TopPerformingEventsCard
+          items={topEvents}
+        />
+
+        <EventParticipantsCard
+          items={participantEvents}
+        />
+      </section>
+
+      {/* RECENT ACTIVITY */}
+      <section className="grid grid-cols-1 items-stretch gap-6 2xl:grid-cols-3">
+        <div className="min-w-0 2xl:col-span-2">
+          <RecentEventsTable items={recentEvents} />
+        </div>
+
+        <div className="min-w-0">
+          <RecentParticipantsCard
+            items={recentParticipants}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DashboardLoading() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-[70vh] items-center justify-center"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#FF6B53]" />
+
+        <p className="text-sm font-medium text-slate-500">
+          Loading dashboard...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <div className="min-h-full w-full bg-[#F5F7FA] p-5 text-[#08111D] lg:p-8 2xl:p-10">
+      <Suspense fallback={<DashboardLoading />}>
+        <DashboardContent />
+      </Suspense>
+    </div>
+  );
+}

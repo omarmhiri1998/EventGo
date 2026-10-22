@@ -83,6 +83,10 @@ export function EventDetailsDialog({
 
   const [message, setMessage] = useState("");
 
+  // ==========================================
+  // LOAD EVENT TICKETS
+  // ==========================================
+
   useEffect(() => {
     if (!open) return;
 
@@ -95,6 +99,13 @@ export function EventDetailsDialog({
       setTicketTypes([]);
       setSelectedTicketId("");
 
+      // DEBUG: Which event did Explore send?
+      console.log("[EventGo] EVENT:", {
+        id: event.id,
+        title: event.title,
+        city: event.city,
+      });
+
       try {
         const data = await getEventTicketTypesAction(
           event.id
@@ -102,10 +113,21 @@ export function EventDetailsDialog({
 
         if (!active) return;
 
+        // DEBUG: What did the backend return?
+        console.log(
+          "[EventGo] TICKETS RETURNED:",
+          data
+        );
+
         setTicketTypes(data);
 
         const firstAvailable = data.find(
           (ticket) => ticket.available > 0
+        );
+
+        console.log(
+          "[EventGo] FIRST AVAILABLE TICKET:",
+          firstAvailable ?? null
         );
 
         setSelectedTicketId(
@@ -113,6 +135,12 @@ export function EventDetailsDialog({
         );
       } catch (err) {
         if (!active) return;
+
+        // DEBUG: Show the actual error.
+        console.error(
+          "[EventGo] TICKET ERROR:",
+          err
+        );
 
         setError(
           err instanceof Error
@@ -126,16 +154,24 @@ export function EventDetailsDialog({
       }
     }
 
-    loadTickets();
+    void loadTickets();
 
     return () => {
       active = false;
     };
   }, [event.id, open]);
 
+  // ==========================================
+  // SELECTED TICKET
+  // ==========================================
+
   const selectedTicket = ticketTypes.find(
     (ticket) => ticket.id === selectedTicketId
   );
+
+  // ==========================================
+  // ADD TO CART
+  // ==========================================
 
   async function handleAddToCart() {
     if (
@@ -168,6 +204,10 @@ export function EventDetailsDialog({
       setAdding(false);
     }
   }
+
+  // ==========================================
+  // DIALOG UI
+  // ==========================================
 
   return (
     <Dialog
