@@ -1,0 +1,510 @@
+import "server-only";
+
+import { cookies } from "next/headers";
+
+export type AuthSession = {
+  authenticated: true;
+  userId: string;
+  role: "user" | "admin";
+};
+
+const AUTH_SESSION_URL =
+  process.env.EVENTGO_AUTH_SESSION_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://eventgo-auth.vercel.app/auth/api/auth/session"
+    : "http://localhost:3002/auth/api/auth/session");
+
+async function validateAuthCookie(
+  cookieHeader: string
+): Promise<AuthSession | null> {
+  let response: Response;
+
+  try {
+    response = await fetch(AUTH_SESSION_URL, {
+      method: "GET",
+      headers: {
+        Cookie: cookieHeader,
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("Authentication service connection failed:", error);
+
+    throw new Error("Authentication service unavailable");
+  }
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Authentication service unavailable: HTTP ${response.status}`
+    );
+  }
+
+  const data: unknown = await response.json();
+
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("authenticated" in data) ||
+    data.authenticated !== true ||
+    !("userId" in data) ||
+    typeof data.userId !== "string" ||
+    !("role" in data) ||
+    (data.role !== "user" && data.role !== "admin")
+  ) {
+    return null;
+  }
+
+  return {
+    authenticated: true,
+    userId: data.userId,
+    role: data.role,
+  };
+}
+
+export async function getSession(): Promise<AuthSession | null> {
+  const cookieStore = await cookies();
+
+  const refreshToken =
+    cookieStore.get("eventgo_refresh")?.value;
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  return validateAuthCookie(
+    `eventgo_refresh=${encodeURIComponent(refreshToken)}`
+  );
+}
+
+export async function requireAuth(
+  request: Request
+): Promise<AuthSession | null> {
+  const cookieHeader = request.headers.get("cookie");
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  return validateAuthCookie(cookieHeader);
+}
+
+import { pool } from "../../../eventgo-backend/src/db/database";
+
+import {
+  createAccessToken,
+  createRefreshToken,
+  hashRefreshToken,
+} from "./tokens";
+
+type SessionUser = {
+  id: string;
+  role: string;
+};
+
+// ======================================
+// CREATE SESSION
+// ======================================
+
+export async function createSession(user: SessionUser) {
+  const accessToken = await createAccessToken(user);
+  const refreshToken = createRefreshToken();
+  const tokenHash = hashRefreshToken(refreshToken);
+
+  await pool.query(
+    `
+    INSERT INTO refresh_tokens (
+      user_id,
+      token_hash,
+      expires_at
+    )
+    VALUES ($1, $2, NOW() + INTERVAL '7 days')
+    `,
+    [user.id, tokenHash]
+  );
+
+  return {
+    accessToken,
+    refreshToken,
+  };
+}
+
+// ======================================
+// REFRESH SESSION
+// ======================================
+
+export async function refreshSession(
+  oldRefreshToken: string
+) {
+  const oldHash = hashRefreshToken(oldRefreshToken);
+  const client = await pool.connect();
+
+  let transactionOpen = false;
+
+  try {
+    await client.query("BEGIN");
+    transactionOpen = true;
+
+    const result = await client.query<{
+      id: string;
+      user_id: string;
+      role: string;
+    }>(
+      `
+      SELECT rt.id, rt.user_id, u.role
+      FROM refresh_tokens rt
+      JOIN users u ON u.id = rt.user_id
+      WHERE rt.token_hash = $1
+        AND rt.revoked_at IS NULL
+        AND rt.expires_at > NOW()
+      FOR UPDATE OF rt
+      `,
+      [oldHash]
+    );
+
+    const session = result.rows[0];
+
+    if (!session) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
+      return null;
+    }
+
+    const newRefreshToken = createRefreshToken();
+    const newHash = hashRefreshToken(newRefreshToken);
+
+    await client.query(
+      `
+      UPDATE refresh_tokens
+      SET revoked_at = NOW()
+      WHERE id = $1
+      `,
+      [session.id]
+    );
+
+    await client.query(
+      `
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES ($1, $2, NOW() + INTERVAL '7 days')
+      `,
+      [session.user_id, newHash]
+    );
+
+    // Create access token BEFORE COMMIT.
+    // If token generation fails, the transaction
+    // can still be rolled back.
+
+    const accessToken = await createAccessToken({
+      id: session.user_id,
+      role: session.role,
+    });
+
+    await client.query("COMMIT");
+    transactionOpen = false;
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(
+          "Refresh session rollback failed:",
+          rollbackError
+        );
+      }
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// ======================================
+// REVOKE SESSION
+// ======================================
+
+export async function revokeSession(
+  refreshToken: string
+): Promise<void> {
+  const tokenHash = hashRefreshToken(refreshToken);
+
+  await pool.query(
+    `
+    UPDATE refresh_tokens
+    SET revoked_at = NOW()
+    WHERE token_hash = $1
+      AND revoked_at IS NULL
+    `,
+    [tokenHash]
+  );
+}
+
+// ======================================
+// VALIDATE SESSION
+// ======================================
+
+export type ValidSession = {
+  userId: string;
+  role: "user" | "admin";
+};
+
+export async function validateSession(
+  refreshToken: string
+): Promise<ValidSession | null> {
+  if (
+    typeof refreshToken !== "string" ||
+    !refreshToken ||
+    refreshToken.length > 512
+  ) {
+    return null;
+  }
+
+  const tokenHash = hashRefreshToken(refreshToken);
+
+  const result = await pool.query<{
+    user_id: string;
+    role: "user" | "admin";
+  }>(
+    `
+    SELECT rt.user_id, u.role
+    FROM refresh_tokens rt
+    JOIN users u ON u.id = rt.user_id
+    WHERE rt.token_hash = $1
+      AND rt.revoked_at IS NULL
+      AND rt.expires_at > NOW()
+    LIMIT 1
+    `,
+    [tokenHash]
+  );
+
+  const session = result.rows[0];
+
+  if (!session) {
+    return null;
+  }
+
+  return {
+    userId: session.user_id,
+    role: session.role,
+  };
+}
+
+import "server-only";
+
+import { cookies } from "next/headers";
+
+type AuthSession = {
+  authenticated: true;
+  userId: string;
+  role: "user" | "admin";
+};
+
+export async function getSession(): Promise<AuthSession | null> {
+  const cookieStore = await cookies();
+
+  const refreshToken =
+    cookieStore.get("eventgo_refresh")?.value;
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(
+    "http://127.0.0.1:3002/auth/api/auth/session",
+    {
+      method: "GET",
+      headers: {
+        Cookie: `eventgo_refresh=${encodeURIComponent(refreshToken)}`,
+      },
+      cache: "no-store",
+    }
+  );
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Authentication service unavailable: HTTP ${response.status}`
+    );
+  }
+
+  const data: unknown = await response.json();
+
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("authenticated" in data) ||
+    data.authenticated !== true ||
+    !("userId" in data) ||
+    typeof data.userId !== "string" ||
+    !("role" in data) ||
+    (data.role !== "user" && data.role !== "admin")
+  ) {
+    return null;
+  }
+
+  return {
+    authenticated: true,
+    userId: data.userId,
+    role: data.role,
+  };
+}
+
+import "server-only";
+
+import { getSession } from "@/lib/auth";
+
+export async function requireAdmin() {
+  const session = await getSession();
+
+  if (!session) {
+    throw new Error("Unauthorized: Authentication required");
+  }
+
+  if (session.role !== "admin") {
+    throw new Error("Forbidden: Admin access required");
+  }
+
+  return session;
+}
+
+import { pool } from "../db/database";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface MyTicket {
+  id: string;
+  orderId: string;
+  eventId: string;
+  eventTitle: string;
+  category: string;
+  city: string;
+  startsAt: string;
+  ticketType: string;
+  quantity: number;
+  status: string;
+  isDemo: boolean;
+}
+
+interface MyTicketRow {
+  id: string;
+  order_id: string;
+  event_id: string;
+  event_title: string;
+  category: string;
+  city: string;
+  starts_at: Date | string;
+  ticket_type: string;
+  quantity: number;
+  status: string;
+  is_demo: boolean;
+}
+
+export async function getMyTickets(
+  userId: string
+): Promise<MyTicket[]> {
+  if (!UUID_PATTERN.test(userId)) {
+    throw new Error("Invalid user ID");
+  }
+
+  const result = await pool.query<MyTicketRow>(
+    `
+    SELECT
+      tg.id,
+      tg.order_id,
+      e.id AS event_id,
+      e.title AS event_title,
+      e.category,
+      c.name AS city,
+      e.starts_at,
+      tt.name AS ticket_type,
+      tg.quantity,
+      tg.status,
+      e.is_demo
+    FROM ticket_groups tg
+    JOIN orders o
+      ON o.id = tg.order_id
+    JOIN ticket_types tt
+      ON tt.id = tg.ticket_type_id
+    JOIN events e
+      ON e.id = tt.event_id
+    JOIN cities c
+      ON c.id = e.city_id
+    WHERE o.user_id = $1
+      AND o.status IN ('PAID', 'DEMO_PAID')
+    ORDER BY
+      e.starts_at ASC,
+      tg.created_at ASC,
+      tg.id ASC
+    `,
+    [userId]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    orderId: row.order_id,
+    eventId: row.event_id,
+    eventTitle: row.event_title,
+    category: row.category,
+    city: row.city,
+    startsAt: new Date(row.starts_at).toISOString(),
+    ticketType: row.ticket_type,
+    quantity: row.quantity,
+    status: row.status,
+    isDemo: row.is_demo,
+  }));
+}
+
+export async function getMyTicketQrToken(
+  userId: string,
+  groupId: string
+): Promise<string | null> {
+  if (
+    !UUID_PATTERN.test(userId) ||
+    !UUID_PATTERN.test(groupId)
+  ) {
+    return null;
+  }
+
+  const result = await pool.query<{
+    qr_token: string;
+  }>(
+    `
+    SELECT tg.qr_token
+    FROM ticket_groups tg
+    JOIN orders o
+      ON o.id = tg.order_id
+    WHERE tg.id = $1
+      AND o.user_id = $2
+      AND o.status IN ('PAID', 'DEMO_PAID')
+      AND tg.status = 'ACTIVE'
+      AND EXISTS (
+        SELECT 1
+        FROM ticket_types tt
+        JOIN events e
+          ON e.id = tt.event_id
+        WHERE tt.id = tg.ticket_type_id
+          AND e.ends_at > NOW()
+      )
+    LIMIT 1
+    `,
+    [groupId, userId]
+  );
+
+  return result.rows[0]?.qr_token ?? null;
+}
