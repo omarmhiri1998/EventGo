@@ -66,12 +66,7 @@ export function FeaturedBanner() {
                   <ArrowRight size={18} />
                 </Link>
 
-                <Link
-                  href="/signup"
-                  className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 text-sm font-semibold text-white transition hover:bg-white/20"
-                >
-                  Create account
-                </Link>
+               
               </div>
             </div>
           </div>
