@@ -18,15 +18,15 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
 
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Disable partial prerendering for this
+  // authentication-dependent admin app.
+  cacheComponents: false,
 
   async rewrites() {
     return [
       {
         source: "/admin/api/auth/logout",
-        destination:
-          `${authUrl}/auth/api/auth/logout`,
+        destination: `${authUrl}/auth/api/auth/logout`,
         basePath: false,
       },
     ];

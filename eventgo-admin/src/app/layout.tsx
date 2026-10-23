@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 
 import "./globals.css";
 
-export const instant = false;
+
 
 const geist = Geist({
   subsets: ["latin"],
