@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -59,15 +60,21 @@ export default function LoginPage() {
       }
 
       // Refresh Token is stored in an HttpOnly Cookie.
-      // Never store access or refresh tokens in localStorage.
+      // Never store tokens in localStorage.
 
-      const siteUrl =
-        process.env.NODE_ENV === "production"
-          ? "https://event-app-nine-rose.vercel.app"
-          : "http://localhost:3000";
+      const isProduction =
+        process.env.NODE_ENV === "production";
+
+      const siteUrl = isProduction
+        ? "https://event-app-nine-rose.vercel.app"
+        : "http://localhost:3000";
+
+      const adminUrl = isProduction
+        ? "https://eventgo-admin-ten.vercel.app/admin"
+        : "http://localhost:3000/admin";
 
       if (data.user.role === "admin") {
-        window.location.replace(`${siteUrl}/admin`);
+        window.location.replace(adminUrl);
         return;
       }
 
@@ -132,14 +139,16 @@ export default function LoginPage() {
         >
           {/* Title */}
           <div className="mb-9">
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
+            <h1 className="text-4xl font-bold md:text-5xl">
               Welcome{" "}
-              <span className="text-orange-400">Back</span>
+              <span className="text-orange-400">
+                Back
+              </span>
             </h1>
 
             <p className="mt-4 text-base leading-relaxed text-white/90">
-              Log in to your EventGo account and continue
-              your event journey.
+              Log in to your EventGo account and
+              continue your event journey.
             </p>
           </div>
 
@@ -215,7 +224,9 @@ export default function LoginPage() {
 
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() =>
+                    setShowPassword(!showPassword)
+                  }
                   disabled={loading}
                   aria-label={
                     showPassword
@@ -235,7 +246,9 @@ export default function LoginPage() {
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                  onChange={(e) =>
+                    setRememberMe(e.target.checked)
+                  }
                   disabled={loading}
                   className="h-4 w-4 accent-orange-500"
                 />
