@@ -2,7 +2,6 @@
 import Link from "next/link";
 
 import { Brand } from "@/components/atoms/Brand/Brand";
-
 import { FooterColumn } from "@/components/molecules/FooterColumn/FooterColumn";
 import { SocialLinks } from "@/components/molecules/SocialLinks/SocialLinks";
 
@@ -14,14 +13,12 @@ const discoverLinks = [
 ];
 
 const companyLinks = [
-  { label: "About", href: "/about" },
+  { label: "About", href: "/help" },
   { label: "For Organizers", href: "/organizers" },
-  { label: "Contact", href: "/contact" },
+  { label: "Contact", href: "/help" },
 ];
 
 const accountLinks = [
-  { label: "Sign in", href: "/login" },
-  { label: "Create account", href: "/signup" },
   { label: "My Events", href: "/my-events" },
   { label: "Help Center", href: "/help" },
 ];
@@ -29,13 +26,11 @@ const accountLinks = [
 export function Footer() {
   return (
     <footer className="bg-[#08111D] text-white">
-
+      {/* Main Footer */}
       <div className="mx-auto max-w-[1280px] px-5 pb-16 pt-20 lg:px-10">
-
-        {/* Footer columns */}
+        {/* Footer Columns */}
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
-
-          {/* Brand and description */}
+          {/* Brand and Description */}
           <div>
             <Brand variant="light" />
 
@@ -45,20 +40,25 @@ export function Footer() {
               with EventGo.
             </p>
 
-            {/* Add real social links later */}
-            <SocialLinks links={[]} className="mt-6" />
+            <SocialLinks
+              links={[]}
+              className="mt-6"
+            />
           </div>
 
+          {/* Discover */}
           <FooterColumn
             title="Discover"
             links={discoverLinks}
           />
 
+          {/* Company */}
           <FooterColumn
             title="Company"
             links={companyLinks}
           />
 
+          {/* Account */}
           <FooterColumn
             title="Account"
             links={accountLinks}
@@ -66,7 +66,7 @@ export function Footer() {
         </div>
       </div>
 
-      {/* Footer bottom */}
+      {/* Footer Bottom */}
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-[1280px] flex-col gap-4 px-5 py-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between lg:px-10">
           <p>
