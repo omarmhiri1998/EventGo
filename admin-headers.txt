@@ -1,0 +1,16 @@
+HTTP/1.1 307 Temporary Redirect
+Age: 0
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Content-Type: text/html; charset=utf-8
+Date: Fri, 23 Oct 2026 18:30:43 GMT
+Link: </admin/_next/static/immutable/media/605ce01b664af129-s.p.0zr6hhvz-h9nw.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2", </admin/_next/static/immutable/chunks/23bpigjfysd3_.css>; rel=preload; as="style"
+Location: https://event-app-nine-rose.vercel.app/auth/login
+Server: Vercel
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+X-Matched-Path: /
+X-Powered-By: Next.js
+X-Vercel-Cache: MISS
+X-Vercel-Id: fra1:fra1:fra1::iad1::9mgvh-1792780243067-31a4f2eaa633
+Transfer-Encoding: chunked
+
