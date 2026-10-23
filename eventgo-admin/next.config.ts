@@ -1,3 +1,4 @@
+
 import type { NextConfig } from "next";
 
 const authUrl =
@@ -24,7 +25,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/admin/api/auth/logout",
-        destination: `${authUrl}/auth/api/auth/logout`,
+        destination:
+          `${authUrl}/auth/api/auth/logout`,
         basePath: false,
       },
     ];

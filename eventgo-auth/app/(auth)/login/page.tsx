@@ -59,22 +59,16 @@ export default function LoginPage() {
         return;
       }
 
-      // Refresh Token is stored in an HttpOnly Cookie.
+      // Refresh Token remains in an HttpOnly Cookie.
       // Never store tokens in localStorage.
 
-      const isProduction =
-        process.env.NODE_ENV === "production";
-
-      const siteUrl = isProduction
-        ? "https://event-app-nine-rose.vercel.app"
-        : "http://localhost:3000";
-
-      const adminUrl = isProduction
-        ? "https://eventgo-admin-ten.vercel.app/admin"
-        : "http://localhost:3000/admin";
+      const siteUrl =
+        process.env.NODE_ENV === "production"
+          ? "https://event-app-nine-rose.vercel.app"
+          : "http://localhost:3000";
 
       if (data.user.role === "admin") {
-        window.location.replace(adminUrl);
+        window.location.replace(`${siteUrl}/admin`);
         return;
       }
 
@@ -139,7 +133,7 @@ export default function LoginPage() {
         >
           {/* Title */}
           <div className="mb-9">
-            <h1 className="text-4xl font-bold md:text-5xl">
+            <h1 className="text-4xl font-bold leading-relaxed md:text-5xl">
               Welcome{" "}
               <span className="text-orange-400">
                 Back
@@ -147,8 +141,8 @@ export default function LoginPage() {
             </h1>
 
             <p className="mt-4 text-base leading-relaxed text-white/90">
-              Log in to your EventGo account and
-              continue your event journey.
+              Log in to your EventGo account and continue
+              your event journey.
             </p>
           </div>
 

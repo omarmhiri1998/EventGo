@@ -1,9 +1,10 @@
+
 import { NextRequest, NextResponse } from "next/server";
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Auth and Admin have their own applications.
+  // Auth and Admin are served by separate apps.
   if (
     pathname === "/auth" ||
     pathname.startsWith("/auth/") ||
@@ -15,7 +16,8 @@ export async function proxy(request: NextRequest) {
 
   const loginUrl = new URL("/auth/login", request.url);
 
-  const refreshToken = request.cookies.get("eventgo_refresh")?.value;
+  const refreshToken =
+    request.cookies.get("eventgo_refresh")?.value;
 
   if (!refreshToken) {
     return NextResponse.redirect(loginUrl);

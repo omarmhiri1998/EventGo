@@ -1,7 +1,10 @@
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@eventgo/backend"],
+  transpilePackages: [
+    "@eventgo/backend",
+  ],
 
   cacheComponents: true,
 
@@ -11,7 +14,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/auth",
-        destination: "https://eventgo-auth.vercel.app/auth",
+        destination:
+          "https://eventgo-auth.vercel.app/auth",
       },
       {
         source: "/auth/:path*",
