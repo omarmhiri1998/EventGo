@@ -9,9 +9,6 @@ export const runtime = "nodejs";
 const COOKIE_NAME = "eventgo_refresh";
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
-export async function POST(request: NextRequest) {
- const origin = request.headers.get("origin");
-
 const allowedOrigins = [
   "http://localhost:3002",
   "http://localhost:3000",
@@ -19,17 +16,20 @@ const allowedOrigins = [
   "https://event-app-nine-rose.vercel.app",
 ];
 
-if (!origin || !allowedOrigins.includes(origin)) {
-  console.error("Login rejected: invalid origin", {
-    origin,
-    expectedOrigins: allowedOrigins,
-  });
+export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
 
-  return NextResponse.json(
-    { message: "Forbidden origin" },
-    { status: 403 }
-  );
-}
+  if (!origin || !allowedOrigins.includes(origin)) {
+    console.error("Login rejected: invalid origin", {
+      origin,
+      expectedOrigins: allowedOrigins,
+    });
+
+    return NextResponse.json(
+      { message: "Forbidden origin" },
+      { status: 403 }
+    );
+  }
 
   let body: unknown;
 
@@ -82,6 +82,7 @@ if (!origin || !allowedOrigins.includes(origin)) {
       sameSite: "lax" as const,
     };
 
+    // Remove old cookies using legacy paths.
     response.cookies.set(COOKIE_NAME, "", {
       ...cookieOptions,
       path: "/api/auth",
@@ -94,6 +95,7 @@ if (!origin || !allowedOrigins.includes(origin)) {
       maxAge: 0,
     });
 
+    // New shared-path refresh cookie.
     response.cookies.set(COOKIE_NAME, refreshToken, {
       ...cookieOptions,
       path: "/",
