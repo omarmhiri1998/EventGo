@@ -3,32 +3,60 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-type AuthSession = {
+export type AuthSession = {
   authenticated: true;
   userId: string;
   role: "user" | "admin";
 };
 
-export async function getSession(): Promise<AuthSession | null> {
-  const cookieStore = await cookies();
+const AUTH_SESSION_URL =
+  process.env.EVENTGO_AUTH_SESSION_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://eventgo-auth.vercel.app/auth/api/auth/session"
+    : "http://localhost:3002/auth/api/auth/session");
 
-  const refreshToken =
-    cookieStore.get("eventgo_refresh")?.value;
+// Temporary diagnostic logging.
+// Logs configuration metadata only, not credentials.
+try {
+  const parsedUrl = new URL(AUTH_SESSION_URL);
 
-  if (!refreshToken) {
-    return null;
-  }
+  console.log("ADMIN AUTH CONFIG:", {
+    nodeEnv: process.env.NODE_ENV,
+    authSessionConfigured: Boolean(
+      process.env.EVENTGO_AUTH_SESSION_URL
+    ),
+    authSessionHost: parsedUrl.host,
+    authSessionPath: parsedUrl.pathname,
+  });
+} catch {
+  console.error(
+    "ADMIN AUTH CONFIG: Invalid authentication service URL"
+  );
+}
 
-  const response = await fetch(
-    "http://127.0.0.1:3002/auth/api/auth/session",
-    {
+async function validateAuthCookie(
+  cookieHeader: string
+): Promise<AuthSession | null> {
+  let response: Response;
+
+  try {
+    response = await fetch(AUTH_SESSION_URL, {
       method: "GET",
       headers: {
-        Cookie: `eventgo_refresh=${encodeURIComponent(refreshToken)}`,
+        Cookie: cookieHeader,
       },
       cache: "no-store",
-    }
-  );
+    });
+  } catch (error) {
+    console.error(
+      "Authentication service connection failed:",
+      error
+    );
+
+    throw new Error(
+      "Authentication service unavailable"
+    );
+  }
 
   if (response.status === 401) {
     return null;
@@ -43,8 +71,8 @@ export async function getSession(): Promise<AuthSession | null> {
   const data: unknown = await response.json();
 
   if (
-    !data ||
     typeof data !== "object" ||
+    data === null ||
     !("authenticated" in data) ||
     data.authenticated !== true ||
     !("userId" in data) ||
@@ -60,4 +88,31 @@ export async function getSession(): Promise<AuthSession | null> {
     userId: data.userId,
     role: data.role,
   };
+}
+
+export async function getSession(): Promise<AuthSession | null> {
+  const cookieStore = await cookies();
+
+  const refreshToken =
+    cookieStore.get("eventgo_refresh")?.value;
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  return validateAuthCookie(
+    `eventgo_refresh=${encodeURIComponent(refreshToken)}`
+  );
+}
+
+export async function requireAuth(
+  request: Request
+): Promise<AuthSession | null> {
+  const cookieHeader = request.headers.get("cookie");
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  return validateAuthCookie(cookieHeader);
 }
