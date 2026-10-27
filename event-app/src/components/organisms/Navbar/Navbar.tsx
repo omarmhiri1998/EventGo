@@ -28,7 +28,7 @@ const navigation = [
   { label: "My Events", href: "/my-events" },
 ];
 
-const ADMIN_URL = "http://localhost:3001";
+const ADMIN_URL = "/admin";
 
 export function Navbar({ role }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
