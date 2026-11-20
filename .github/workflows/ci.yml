@@ -174,7 +174,14 @@ jobs:
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Prepare E2E event
+        run: node scripts/seed-e2e.cjs
 
+      - name: Start EventGo applications
+        shell: bash
+        run: |
+          nohup npm run dev > /tmp/eventgo-dev.log 2>&1 &
+          echo $! > /tmp/eventgo-dev.pid
       - name: Start EventGo applications
         shell: bash
         run: |
