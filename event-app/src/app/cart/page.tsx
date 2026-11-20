@@ -1,8 +1,12 @@
-
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useRef } from "react";
 import Link from "next/link";
+
+import {
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   ArrowLeft,
@@ -20,12 +24,26 @@ import {
   updateCartQuantityAction,
 } from "@/app/actions/cart.actions";
 
+import { useCurrentUserId } from "@/app/providers";
+import { cartQueryKey, useCart } from "@/hooks/useCart";
+
 type CartResult = Awaited<
   ReturnType<typeof getCartAction>
 >;
 
 type CartData = NonNullable<CartResult["cart"]>;
 type CartItem = CartData["items"][number];
+
+type CartChange =
+  | {
+      type: "quantity";
+      ticketTypeId: string;
+      quantity: number;
+    }
+  | {
+      type: "remove";
+      ticketTypeId: string;
+    };
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("de-DE", {
@@ -35,45 +53,89 @@ function formatPrice(amount: number, currency: string) {
 }
 
 export default function CartPage() {
-  const [cart, setCart] = useState<CartData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<string | null>(
-    null
-  );
-  const [error, setError] = useState<string | null>(null);
+  const userId = useCurrentUserId();
+  const queryClient = useQueryClient();
 
-  const loadCart = useCallback(async () => {
-    try {
-      const response = await getCartAction();
-      setCart(response.cart);
-      setError(null);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load your cart."
+  const changeInProgress = useRef(false);
+
+  const cartQuery = useCart();
+  const cart = cartQuery.data?.cart ?? null;
+
+  const cartMutation = useMutation({
+    mutationFn: async (change: CartChange) => {
+      if (change.type === "quantity") {
+        return updateCartQuantityAction(
+          change.ticketTypeId,
+          change.quantity
+        );
+      }
+
+      return removeFromCartAction(change.ticketTypeId);
+    },
+
+    retry: false,
+
+    onMutate: async () => {
+      await queryClient.cancelQueries({
+        queryKey: cartQueryKey(userId),
+        exact: true,
+      });
+    },
+
+    onSuccess: async (updatedCart) => {
+      // Prevent an older read from replacing the updated cart.
+      await queryClient.cancelQueries({
+        queryKey: cartQueryKey(userId),
+        exact: true,
+      });
+
+      queryClient.setQueryData<CartResult>(
+        cartQueryKey(userId),
+        {
+          authenticated: true,
+          cart: updatedCart,
+        }
       );
+    },
+
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: cartQueryKey(userId),
+        exact: true,
+      }),
+  });
+
+  const updatingId = cartMutation.isPending
+    ? cartMutation.variables?.ticketTypeId ?? null
+    : null;
+
+  const busy = cartMutation.isPending;
+
+  const error =
+    cartMutation.error?.message ??
+    cartQuery.error?.message ??
+    null;
+
+  async function saveChange(change: CartChange) {
+    if (changeInProgress.current) return;
+
+    changeInProgress.current = true;
+
+    try {
+      await cartMutation.mutateAsync(change);
+    } catch {
+      // The mutation error is displayed below.
     } finally {
-      setLoading(false);
+      changeInProgress.current = false;
     }
-  }, []);
-
-  useEffect(() => {
-    void loadCart();
-  }, [loadCart]);
-
-  function notifyCartChanged() {
-    window.dispatchEvent(
-      new CustomEvent("eventgo:cart-updated")
-    );
   }
 
-  async function changeQuantity(
+  function changeQuantity(
     item: CartItem,
     nextQuantity: number
   ) {
     if (
-      updatingId ||
+      busy ||
       nextQuantity < 1 ||
       nextQuantity > 10 ||
       nextQuantity > item.available
@@ -81,50 +143,27 @@ export default function CartPage() {
       return;
     }
 
-    setUpdatingId(item.ticketTypeId);
-    setError(null);
-
-    try {
-      const updated = await updateCartQuantityAction(
-        item.ticketTypeId,
-        nextQuantity
-      );
-
-      setCart(updated);
-      notifyCartChanged();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to update ticket quantity."
-      );
-    } finally {
-      setUpdatingId(null);
-    }
+    void saveChange({
+      type: "quantity",
+      ticketTypeId: item.ticketTypeId,
+      quantity: nextQuantity,
+    });
   }
 
-  async function removeItem(ticketTypeId: string) {
-    if (updatingId) return;
+  function removeItem(ticketTypeId: string) {
+    if (busy) return;
 
-    setUpdatingId(ticketTypeId);
-    setError(null);
+    void saveChange({
+      type: "remove",
+      ticketTypeId,
+    });
+  }
 
-    try {
-      const updated = await removeFromCartAction(
-        ticketTypeId
-      );
+  function retryLoad() {
+    if (busy) return;
 
-      setCart(updated);
-      notifyCartChanged();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to remove ticket."
-      );
-    } finally {
-      setUpdatingId(null);
-    }
+    cartMutation.reset();
+    void cartQuery.refetch();
   }
 
   const items = cart?.items ?? [];
@@ -146,6 +185,7 @@ export default function CartPage() {
   );
 
   const canCheckout =
+    !error &&
     items.length > 0 &&
     items.every(
       (item) =>
@@ -155,10 +195,11 @@ export default function CartPage() {
         new Date(item.eventDate).getTime() > Date.now()
     );
 
-  if (loading) {
+  if (cartQuery.isPending) {
     return (
       <main className="flex min-h-[65vh] items-center justify-center">
         <LoaderCircle
+          aria-label="Loading cart"
           className="animate-spin text-[#FF6B53]"
           size={36}
         />
@@ -186,6 +227,7 @@ export default function CartPage() {
             <h1 className="text-3xl font-bold text-[#08111D]">
               Your Cart
             </h1>
+
             <p className="mt-1 text-sm text-slate-500">
               {ticketCount} tickets in your cart
             </p>
@@ -198,10 +240,12 @@ export default function CartPage() {
             className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
           >
             {error}
+
             <button
               type="button"
-              onClick={() => void loadCart()}
-              className="ml-3 font-semibold underline"
+              disabled={busy || cartQuery.isFetching}
+              onClick={retryLoad}
+              className="ml-3 font-semibold underline disabled:opacity-50"
             >
               Retry
             </button>
@@ -209,33 +253,34 @@ export default function CartPage() {
         )}
 
         {items.length === 0 ? (
-          <div className="rounded-3xl border border-slate-100 bg-white px-6 py-20 text-center shadow-sm">
-            <ShoppingCart
-              size={54}
-              className="mx-auto text-slate-300"
-            />
+          !error && (
+            <div className="rounded-3xl border border-slate-100 bg-white px-6 py-20 text-center shadow-sm">
+              <ShoppingCart
+                size={54}
+                className="mx-auto text-slate-300"
+              />
 
-            <h2 className="mt-5 text-xl font-bold text-[#08111D]">
-              Your cart is empty
-            </h2>
+              <h2 className="mt-5 text-xl font-bold text-[#08111D]">
+                Your cart is empty
+              </h2>
 
-            <p className="mt-2 text-slate-500">
-              Find an event and add your favorite tickets.
-            </p>
+              <p className="mt-2 text-slate-500">
+                Find an event and add your favorite tickets.
+              </p>
 
-            <Link
-              href="/explore"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#FF6B53] px-6 py-3 font-semibold text-white hover:bg-[#F05B44]"
-            >
-              Explore Events
-              <ArrowRight size={18} />
-            </Link>
-          </div>
+              <Link
+                href="/explore"
+                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#FF6B53] px-6 py-3 font-semibold text-white hover:bg-[#F05B44]"
+              >
+                Explore Events
+                <ArrowRight size={18} />
+              </Link>
+            </div>
+          )
         ) : (
           <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
             <section className="space-y-4">
               {items.map((item) => {
-                const busy = updatingId !== null;
                 const price = Number(item.unitPrice);
 
                 return (
@@ -279,11 +324,7 @@ export default function CartPage() {
                         </p>
 
                         <p className="mt-1 text-sm text-slate-500">
-                          {formatPrice(
-                            price,
-                            item.currency
-                          )}{" "}
-                          per ticket
+                          {formatPrice(price, item.currency)} per ticket
                         </p>
                       </div>
 
@@ -292,7 +333,7 @@ export default function CartPage() {
                           type="button"
                           disabled={busy}
                           onClick={() =>
-                            void removeItem(item.ticketTypeId)
+                            removeItem(item.ticketTypeId)
                           }
                           aria-label={`Remove ${item.eventTitle}`}
                           className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-red-600 disabled:opacity-50"
@@ -305,11 +346,9 @@ export default function CartPage() {
                           <button
                             type="button"
                             aria-label="Decrease quantity"
-                            disabled={
-                              busy || item.quantity <= 1
-                            }
+                            disabled={busy || item.quantity <= 1}
                             onClick={() =>
-                              void changeQuantity(
+                              changeQuantity(
                                 item,
                                 item.quantity - 1
                               )
@@ -320,8 +359,7 @@ export default function CartPage() {
                           </button>
 
                           <span className="w-10 text-center text-sm font-bold tabular-nums">
-                            {updatingId ===
-                            item.ticketTypeId ? (
+                            {updatingId === item.ticketTypeId ? (
                               <LoaderCircle
                                 size={16}
                                 className="mx-auto animate-spin"
@@ -340,7 +378,7 @@ export default function CartPage() {
                               item.quantity >= item.available
                             }
                             onClick={() =>
-                              void changeQuantity(
+                              changeQuantity(
                                 item,
                                 item.quantity + 1
                               )
@@ -402,6 +440,7 @@ export default function CartPage() {
                     <span className="font-semibold text-[#08111D]">
                       Subtotal
                     </span>
+
                     <span className="text-xl font-bold text-[#08111D]">
                       {formatPrice(amount, currency)}
                     </span>
@@ -411,14 +450,14 @@ export default function CartPage() {
 
               <Link
                 href={canCheckout ? "/checkout" : "/cart"}
-                aria-disabled={!canCheckout || updatingId !== null}
+                aria-disabled={!canCheckout || busy}
                 onClick={(event) => {
-                  if (!canCheckout || updatingId !== null) {
+                  if (!canCheckout || busy) {
                     event.preventDefault();
                   }
                 }}
                 className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-4 font-bold text-white transition ${
-                  canCheckout && updatingId === null
+                  canCheckout && !busy
                     ? "bg-[#FF6B53] hover:bg-[#F05B44]"
                     : "cursor-not-allowed bg-slate-300"
                 }`}

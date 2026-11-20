@@ -1,13 +1,12 @@
-
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
-  CalendarDays,
-  Plus,
-  Trash2,
-  Ticket,
-} from "lucide-react";
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+} from "@tanstack/react-query";
+import { CalendarDays, Plus, Trash2, Ticket } from "lucide-react";
 
 import { createEventAction } from "@/app/actions/manage-events.actions";
 
@@ -33,8 +32,7 @@ interface TicketType {
   quantity: string;
 }
 
-const labelClass =
-  "mb-2 block text-sm font-semibold text-[#08111D]";
+const labelClass = "mb-2 block text-sm font-semibold text-[#08111D]";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white p-3 " +
@@ -51,6 +49,16 @@ const initialTickets: TicketType[] = [
 ];
 
 export function EventForm() {
+  const [queryClient] = useState(() => new QueryClient());
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <EventFormContent />
+    </QueryClientProvider>
+  );
+}
+
+function EventFormContent() {
   const nextTicketId = useRef(1);
 
   const [title, setTitle] = useState("");
@@ -60,14 +68,25 @@ export function EventForm() {
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [tickets, setTickets] = useState<TicketType[]>(initialTickets);
+  const [validationError, setValidationError] = useState("");
 
-  const [tickets, setTickets] = useState<TicketType[]>(
-    initialTickets
-  );
+  const createEvent = useMutation({
+    mutationFn: async (input: Parameters<typeof createEventAction>[0]) => {
+      const result = await createEventAction(input);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    },
+    retry: false,
+    onSuccess: resetForm,
+  });
+
+  const isSubmitting = createEvent.isPending;
+  const errorMessage = validationError || createEvent.error?.message;
 
   function updateTicket(
     id: number,
@@ -76,9 +95,7 @@ export function EventForm() {
   ) {
     setTickets((previous) =>
       previous.map((ticket) =>
-        ticket.id === id
-          ? { ...ticket, [key]: value }
-          : ticket
+        ticket.id === id ? { ...ticket, [key]: value } : ticket
       )
     );
   }
@@ -115,15 +132,13 @@ export function EventForm() {
     nextTicketId.current = 1;
   }
 
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (isSubmitting) return;
 
-    setSuccessMessage("");
-    setErrorMessage("");
+    createEvent.reset();
+    setValidationError("");
 
     try {
       if (!title.trim()) {
@@ -144,10 +159,7 @@ export function EventForm() {
 
       const parsedCapacity = Number(capacity);
 
-      if (
-        !Number.isSafeInteger(parsedCapacity) ||
-        parsedCapacity < 0
-      ) {
+      if (!Number.isSafeInteger(parsedCapacity) || parsedCapacity < 0) {
         throw new Error("Invalid event capacity.");
       }
 
@@ -161,18 +173,13 @@ export function EventForm() {
 
       if (
         endDate &&
-        (Number.isNaN(endDate.getTime()) ||
-          endDate <= startDate)
+        (Number.isNaN(endDate.getTime()) || endDate <= startDate)
       ) {
-        throw new Error(
-          "End date must be after start date."
-        );
+        throw new Error("End date must be after start date.");
       }
 
       if (tickets.length === 0) {
-        throw new Error(
-          "Add at least one ticket type."
-        );
+        throw new Error("Add at least one ticket type.");
       }
 
       const parsedTickets = tickets.map((ticket) => {
@@ -181,9 +188,7 @@ export function EventForm() {
           ticket.price.trim() === "" ||
           ticket.quantity.trim() === ""
         ) {
-          throw new Error(
-            "Please complete all ticket fields."
-          );
+          throw new Error("Please complete all ticket fields.");
         }
 
         const price = Number(ticket.price);
@@ -199,13 +204,8 @@ export function EventForm() {
           );
         }
 
-        if (
-          !Number.isSafeInteger(quantity) ||
-          quantity < 0
-        ) {
-          throw new Error(
-            "Ticket quantity must be a non-negative integer."
-          );
+        if (!Number.isSafeInteger(quantity) || quantity < 0) {
+          throw new Error("Ticket quantity must be a non-negative integer.");
         }
 
         return {
@@ -221,14 +221,10 @@ export function EventForm() {
       );
 
       if (totalQuantity > parsedCapacity) {
-        throw new Error(
-          "Total ticket quantity cannot exceed event capacity."
-        );
+        throw new Error("Total ticket quantity cannot exceed event capacity.");
       }
 
-      setIsSubmitting(true);
-
-      const result = await createEventAction({
+      createEvent.mutate({
         title: title.trim(),
         description: description.trim(),
         category,
@@ -238,92 +234,58 @@ export function EventForm() {
         capacity: parsedCapacity,
         tickets: parsedTickets,
       });
-
-      if (!result.success) {
-        setErrorMessage(result.error);
-        return;
-      }
-
-      resetForm();
-      setSuccessMessage("Event created successfully!");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong."
+      setValidationError(
+        error instanceof Error ? error.message : "Something went wrong."
       );
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-8 text-[#08111D]"
-    >
-      {/* EVENT INFORMATION */}
+    <form onSubmit={handleSubmit} className="space-y-8 text-[#08111D]">
       <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
         <h2 className="text-xl font-bold text-[#08111D]">
           Event Information
         </h2>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
-          {/* TITLE */}
           <div className="md:col-span-2">
             <label htmlFor="event-title" className={labelClass}>
               Event Title
             </label>
-
             <input
               id="event-title"
               type="text"
               required
               value={title}
-              onChange={(event) =>
-                setTitle(event.target.value)
-              }
+              onChange={(event) => setTitle(event.target.value)}
               placeholder="Enter event title"
               className={inputClass}
             />
           </div>
 
-          {/* DESCRIPTION */}
           <div className="md:col-span-2">
-            <label
-              htmlFor="event-description"
-              className={labelClass}
-            >
+            <label htmlFor="event-description" className={labelClass}>
               Description
             </label>
-
             <textarea
               id="event-description"
               value={description}
-              onChange={(event) =>
-                setDescription(event.target.value)
-              }
+              onChange={(event) => setDescription(event.target.value)}
               rows={4}
               placeholder="Describe your event..."
               className={`${inputClass} resize-y`}
             />
           </div>
 
-          {/* CATEGORY */}
           <div>
-            <label
-              htmlFor="event-category"
-              className={labelClass}
-            >
+            <label htmlFor="event-category" className={labelClass}>
               Category
             </label>
-
             <select
               id="event-category"
               value={category}
-              onChange={(event) =>
-                setCategory(event.target.value)
-              }
+              onChange={(event) => setCategory(event.target.value)}
               className={inputClass}
             >
               {categories.map((item) => (
@@ -332,77 +294,59 @@ export function EventForm() {
                   value={item}
                   className="bg-white text-[#08111D]"
                 >
-                  {item.charAt(0).toUpperCase() +
-                    item.slice(1)}
+                  {item.charAt(0).toUpperCase() + item.slice(1)}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* CITY */}
           <div>
             <label htmlFor="event-city" className={labelClass}>
               City
             </label>
-
             <input
               id="event-city"
               type="text"
               required
               value={city}
-              onChange={(event) =>
-                setCity(event.target.value)
-              }
+              onChange={(event) => setCity(event.target.value)}
               placeholder="e.g. Dortmund"
               className={inputClass}
             />
           </div>
 
-          {/* START DATE */}
           <div>
             <label htmlFor="event-start" className={labelClass}>
               Start Date & Time
             </label>
-
             <input
               id="event-start"
               type="datetime-local"
               required
               value={startsAt}
-              onChange={(event) =>
-                setStartsAt(event.target.value)
-              }
+              onChange={(event) => setStartsAt(event.target.value)}
               className={inputClass}
             />
           </div>
 
-          {/* END DATE */}
           <div>
             <label htmlFor="event-end" className={labelClass}>
               End Date & Time
             </label>
-
             <input
               id="event-end"
               type="datetime-local"
               value={endsAt}
               min={startsAt || undefined}
-              onChange={(event) =>
-                setEndsAt(event.target.value)
-              }
+              onChange={(event) => setEndsAt(event.target.value)}
               className={inputClass}
             />
           </div>
 
-          {/* CAPACITY */}
           <div>
-            <label
-              htmlFor="event-capacity"
-              className={labelClass}
-            >
+            <label htmlFor="event-capacity" className={labelClass}>
               Event Capacity
             </label>
-
             <input
               id="event-capacity"
               type="number"
@@ -410,9 +354,7 @@ export function EventForm() {
               step="1"
               required
               value={capacity}
-              onChange={(event) =>
-                setCapacity(event.target.value)
-              }
+              onChange={(event) => setCapacity(event.target.value)}
               placeholder="e.g. 200"
               className={inputClass}
             />
@@ -420,7 +362,6 @@ export function EventForm() {
         </div>
       </section>
 
-      {/* TICKET TYPES */}
       <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -428,7 +369,6 @@ export function EventForm() {
               <Ticket size={21} className="text-[#FF6B53]" />
               Ticket Types
             </h2>
-
             <p className="mt-2 text-sm text-slate-500">
               Configure the tickets available for this event.
             </p>
@@ -451,41 +391,27 @@ export function EventForm() {
               key={ticket.id}
               className="grid gap-4 rounded-2xl bg-[#FCFAF7] p-4 md:grid-cols-[2fr_1fr_1fr_auto]"
             >
-              {/* TICKET NAME */}
               <div>
-                <label
-                  htmlFor={`ticket-name-${ticket.id}`}
-                  className={labelClass}
-                >
+                <label htmlFor={`ticket-name-${ticket.id}`} className={labelClass}>
                   Ticket Name
                 </label>
-
                 <input
                   id={`ticket-name-${ticket.id}`}
                   type="text"
                   required
                   value={ticket.name}
                   onChange={(event) =>
-                    updateTicket(
-                      ticket.id,
-                      "name",
-                      event.target.value
-                    )
+                    updateTicket(ticket.id, "name", event.target.value)
                   }
                   placeholder="e.g. VIP"
                   className={inputClass}
                 />
               </div>
 
-              {/* PRICE */}
               <div>
-                <label
-                  htmlFor={`ticket-price-${ticket.id}`}
-                  className={labelClass}
-                >
+                <label htmlFor={`ticket-price-${ticket.id}`} className={labelClass}>
                   Price (€)
                 </label>
-
                 <input
                   id={`ticket-price-${ticket.id}`}
                   type="number"
@@ -494,26 +420,17 @@ export function EventForm() {
                   step="0.01"
                   value={ticket.price}
                   onChange={(event) =>
-                    updateTicket(
-                      ticket.id,
-                      "price",
-                      event.target.value
-                    )
+                    updateTicket(ticket.id, "price", event.target.value)
                   }
                   placeholder="0.00"
                   className={inputClass}
                 />
               </div>
 
-              {/* QUANTITY */}
               <div>
-                <label
-                  htmlFor={`ticket-quantity-${ticket.id}`}
-                  className={labelClass}
-                >
+                <label htmlFor={`ticket-quantity-${ticket.id}`} className={labelClass}>
                   Quantity
                 </label>
-
                 <input
                   id={`ticket-quantity-${ticket.id}`}
                   type="number"
@@ -522,18 +439,13 @@ export function EventForm() {
                   step="1"
                   value={ticket.quantity}
                   onChange={(event) =>
-                    updateTicket(
-                      ticket.id,
-                      "quantity",
-                      event.target.value
-                    )
+                    updateTicket(ticket.id, "quantity", event.target.value)
                   }
                   placeholder="100"
                   className={inputClass}
                 />
               </div>
 
-              {/* REMOVE */}
               <div className="flex items-end">
                 <button
                   type="button"
@@ -556,7 +468,6 @@ export function EventForm() {
         )}
       </section>
 
-      {/* STATUS AND CREATE BUTTON */}
       <div className="flex flex-col items-end gap-4">
         {errorMessage && (
           <p
@@ -567,12 +478,12 @@ export function EventForm() {
           </p>
         )}
 
-        {successMessage && (
+        {createEvent.isSuccess && (
           <p
             role="status"
             className="w-full rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700"
           >
-            {successMessage}
+            Event created successfully!
           </p>
         )}
 

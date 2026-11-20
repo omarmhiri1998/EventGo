@@ -1,48 +1,60 @@
-
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import {
-  getCartAction,
-} from "@/app/actions/cart.actions";
+import { useCurrentUserId } from "@/app/providers";
+import { cartQueryKey, useCart } from "@/hooks/useCart";
 
 export function FloatingCart() {
-  const [count, setCount] = useState(0);
+  const userId = useCurrentUserId();
+  const queryClient = useQueryClient();
 
-  const refreshCart = useCallback(async () => {
-    try {
-      const result = await getCartAction();
+  const { data } = useCart();
 
-      const total =
-        result.cart?.items.reduce(
-          (sum, item) => sum + item.quantity,
-          0
-        ) ?? 0;
-
-      setCount(total);
-    } catch (error) {
-      console.error("Unable to load cart:", error);
-    }
-  }, []);
+  const count =
+    data?.cart?.items.reduce(
+      (sum, item) => sum + item.quantity,
+      0
+    ) ?? 0;
 
   useEffect(() => {
-    void refreshCart();
+    async function refreshCart() {
+      try {
+        const queryKey = cartQueryKey(userId);
+
+        await queryClient.cancelQueries({
+          queryKey,
+          exact: true,
+        });
+
+        await queryClient.invalidateQueries({
+          queryKey,
+          exact: true,
+        });
+      } catch (error) {
+        console.error("Unable to refresh cart:", error);
+      }
+    }
+
+    function handleCartUpdated() {
+      void refreshCart();
+    }
 
     window.addEventListener(
       "eventgo:cart-updated",
-      refreshCart
+      handleCartUpdated
     );
 
     return () => {
       window.removeEventListener(
         "eventgo:cart-updated",
-        refreshCart
+        handleCartUpdated
       );
     };
-  }, [refreshCart]);
+  }, [queryClient, userId]);
 
   return (
     <Link

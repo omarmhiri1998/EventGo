@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   CalendarDays,
@@ -14,57 +14,31 @@ import {
   Users,
 } from "lucide-react";
 
-import { getMyTicketsAction } from
-  "@/app/actions/my-tickets.actions";
+import { getMyTicketsAction } from "@/app/actions/my-tickets.actions";
+import { useCurrentUserId } from "@/app/providers";
 
-import { MyTicketDialog } from
-  "@/components/molecules/MyTicketDialog/MyTicketDialog";
+import { MyTicketDialog } from "@/components/molecules/MyTicketDialog/MyTicketDialog";
 
-import type { MyTicket } from
-  "@eventgo/backend/services/my-ticket.service";
+import type { MyTicket } from "@eventgo/backend/services/my-ticket.service";
 
 export default function MyEventsPage() {
-  const [tickets, setTickets] = useState<MyTicket[]>(
-    []
-  );
-  const [selected, setSelected] =
-    useState<MyTicket | null>(null);
+  const userId = useCurrentUserId();
+
+  const [selected, setSelected] = useState<MyTicket | null>(null);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] =
-    useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadTickets() {
-      try {
-        const data = await getMyTicketsAction();
-
-        if (active) {
-          setTickets(data);
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load tickets."
-          );
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadTickets();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const {
+    data: tickets,
+    isPending,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["my-tickets", userId],
+    queryFn: () => getMyTicketsAction(),
+    staleTime: 0,
+  });
 
   function openTicket(ticket: MyTicket) {
     setSelected(ticket);
@@ -89,21 +63,34 @@ export default function MyEventsPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex min-h-[300px] items-center justify-center">
+        {isPending ? (
+          <div
+            role="status"
+            aria-label="Loading tickets"
+            className="flex min-h-[300px] items-center justify-center"
+          >
             <LoaderCircle
               size={34}
               className="animate-spin text-[#FF6B53]"
             />
           </div>
-        ) : error ? (
+        ) : isError && !tickets ? (
           <div
             role="alert"
             className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700"
           >
-            {error}
+            <p>{error?.message ?? "Unable to load tickets."}</p>
+
+            <button
+              type="button"
+              disabled={isFetching}
+              onClick={() => void refetch()}
+              className="mt-3 font-semibold underline disabled:opacity-50"
+            >
+              {isFetching ? "Retrying..." : "Try again"}
+            </button>
           </div>
-        ) : tickets.length === 0 ? (
+        ) : !tickets?.length ? (
           <div className="rounded-3xl border border-slate-100 bg-white px-6 py-20 text-center shadow-sm">
             <Ticket
               size={52}
@@ -115,8 +102,7 @@ export default function MyEventsPage() {
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Your group tickets appear here
-              after checkout.
+              Your group tickets appear here after checkout.
             </p>
 
             <Link
@@ -169,9 +155,7 @@ export default function MyEventsPage() {
                     <Users size={18} />
                     <span className="font-bold">
                       {ticket.quantity}{" "}
-                      {ticket.quantity === 1
-                        ? "Person"
-                        : "Persons"}
+                      {ticket.quantity === 1 ? "Person" : "Persons"}
                     </span>
                   </div>
                 </div>
@@ -182,9 +166,7 @@ export default function MyEventsPage() {
                       size={18}
                       className="text-[#FF6B53]"
                     />
-                    {new Date(
-                      ticket.startsAt
-                    ).toLocaleString("de-DE", {
+                    {new Date(ticket.startsAt).toLocaleString("de-DE", {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}

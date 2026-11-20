@@ -10,6 +10,8 @@ import { FloatingCart } from "@/components/organisms/FloatingCart/FloatingCart";
 import { getSession } from "@/lib/auth";
 import { cn } from "../lib/utils";
 
+import Providers from "./providers";
+
 export const instant = false;
 
 const geist = Geist({
@@ -34,13 +36,18 @@ export default async function RootLayout({
       className={cn("font-sans", geist.variable)}
     >
       <body>
-        <Navbar role={session.role} />
+        <Providers
+          key={session.userId}
+          userId={session.userId}
+        >
+          <Navbar role={session.role} />
 
-        {children}
+          {children}
 
-        <Footer />
+          <Footer />
 
-        <FloatingCart />
+          <FloatingCart />
+        </Providers>
       </body>
     </html>
   );

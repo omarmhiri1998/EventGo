@@ -11,6 +11,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@eventgo/backend": "*",
+    "@tanstack/react-query": "^5.105.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "leaflet": "^1.9.4",
